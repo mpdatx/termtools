@@ -9,7 +9,9 @@
 -- Behavior: pressing the hotkey brings WezTerm to the foreground if it's
 -- running. No-op when WezTerm isn't running — does not launch it.
 
-local HOTKEY = { mods = { 'ctrl', 'alt', 'cmd' }, key = 'space' }
+-- Bare backtick: pressing ` will summon WezTerm system-wide. You lose the
+-- key for typing — accepted tradeoff per the install instructions.
+local HOTKEY = { mods = {}, key = '`' }
 local BUNDLE_ID = 'com.github.wez.wezterm'
 
 local function focus()

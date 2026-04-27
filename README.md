@@ -252,6 +252,6 @@ docs/
 
 ## Non-goals (for v1)
 
-- No global hotkeys built in: pickers fire only when WezTerm is focused. macOS users can wire one with the Hammerspoon recipe at `examples/macos/wezterm-focus.lua` — `dofile` it from `~/.hammerspoon/init.lua` and the script binds `Ctrl+Alt+Cmd+Space` to focus WezTerm. A Windows recipe is not yet shipped.
+- No global hotkeys built in: pickers fire only when WezTerm is focused. macOS users can wire one with the Hammerspoon recipe at `examples/macos/wezterm-focus.lua` — `dofile` it from `~/.hammerspoon/init.lua` and the script binds bare `` ` `` (backtick) to focus WezTerm. A Windows recipe is not yet shipped.
 - No "send a prompt to the running Claude in the active tab" — out of scope by design.
 - No automated test suite. The surface is small enough that manual verification suffices.
