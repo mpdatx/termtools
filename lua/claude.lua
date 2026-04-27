@@ -102,26 +102,20 @@ local function effective_state(entry, now)
   return 'waiting'
 end
 
--- Walk every pane in every mux window. Re-classify Claude panes; preserve
+-- Re-classify Claude panes across every pane in every mux window. Preserves
 -- the `since` timestamp when state hasn't changed so the stuck-too-long
 -- counter measures time-in-current-state, not time-since-discovery.
 function M.scan()
+  local util = require('util')
   local now = os.time()
   local fresh = {}
-  local ok_w, windows = pcall(wezterm.mux.all_windows)
-  if not ok_w then return end
-  for _, win in ipairs(windows) do
-    for _, tab in ipairs(win:tabs()) do
-      for _, pane in ipairs(tab:panes()) do
-        if is_claude_pane(pane) then
-          local s = classify(pane)
-          local prev = state[pane:pane_id()]
-          local since = (prev and prev.state == s) and prev.since or now
-          fresh[pane:pane_id()] = { state = s, since = since, pane = pane }
-        end
-      end
-    end
-  end
+  util.foreach_pane(function(pane)
+    if not is_claude_pane(pane) then return end
+    local s = classify(pane)
+    local prev = state[pane:pane_id()]
+    local since = (prev and prev.state == s) and prev.since or now
+    fresh[pane:pane_id()] = { state = s, since = since, pane = pane }
+  end)
   state = fresh
 end
 
@@ -208,11 +202,8 @@ local function format_age(secs)
 end
 
 local function project_label_for_pane(pane)
-  local cwd
-  local ok_pickers, pickers = pcall(require, 'pickers')
-  if ok_pickers and pickers.pane_cwd then
-    cwd = pickers.pane_cwd(pane)
-  end
+  local util = require('util')
+  local cwd = util.pane_cwd(pane)
   if not cwd then return '?' end
   local ok_projects, projects = pcall(require, 'projects')
   local root = ok_projects and projects.find_root(cwd) or cwd

@@ -100,4 +100,52 @@ function M.basename(path)
   return p:match('([^/]+)$') or p
 end
 
+-- ── WezTerm-pane helpers ──────────────────────────────────────────────────
+-- These wrap two recurring patterns:
+--   pane_cwd      — resolve a pane's working directory through OSC 7/9;9
+--                   first, falling back to OS process-info. Works without
+--                   shell integration on Windows powershell/cmd.
+--   foreach_pane  — walk every pane in every mux window (or one specific
+--                   window) and call `fn(pane, tab, win)`. If `fn` returns
+--                   non-nil, walking stops and the value is returned.
+
+function M.pane_cwd(pane)
+  if not pane then return nil end
+  local ok, cwd = pcall(pane.get_current_working_dir, pane)
+  if ok and cwd then
+    if type(cwd) == 'table' and cwd.file_path then return cwd.file_path end
+    if type(cwd) == 'string' and cwd ~= '' then return cwd end
+  end
+  local ok2, info = pcall(pane.get_foreground_process_info, pane)
+  if ok2 and info and type(info.cwd) == 'string' and info.cwd ~= '' then
+    return info.cwd
+  end
+  return nil
+end
+
+function M.foreach_pane(fn, opts)
+  opts = opts or {}
+  local ok_wt, wezterm = pcall(require, 'wezterm')
+  if not ok_wt then return nil end
+
+  local windows
+  if opts.window then
+    windows = { opts.window }
+  else
+    local ok, all = pcall(wezterm.mux.all_windows)
+    if not ok then return nil end
+    windows = all
+  end
+
+  for _, win in ipairs(windows) do
+    for _, tab in ipairs(win:tabs()) do
+      for _, pane in ipairs(tab:panes()) do
+        local result = fn(pane, tab, win)
+        if result ~= nil then return result end
+      end
+    end
+  end
+  return nil
+end
+
 return M

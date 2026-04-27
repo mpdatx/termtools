@@ -164,7 +164,7 @@ function M.palette_entries(_window, pane)
     },
   }
 
-  local cwd = pickers.pane_cwd(pane)
+  local cwd = require('util').pane_cwd(pane)
   local root = projects.find_root(cwd) or cwd
   if not root then return entries end
 

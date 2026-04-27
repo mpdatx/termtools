@@ -14,42 +14,19 @@ local actions = require('actions')
 
 local M = {}
 
--- Resolve the pane's working directory. Two-step:
---  1. Prefer OSC 7 / 9;9 if the shell reports it (URL object on modern
---     WezTerm, string on older). Most reliable when present.
---  2. Otherwise read the foreground process's cwd from the OS. Works on
---     Windows / Linux / macOS without any shell-integration setup, which is
---     important because powershell.exe and cmd.exe don't emit OSC 7.
-local function pane_cwd(pane)
-  if not pane then return nil end
-
-  local ok, cwd = pcall(pane.get_current_working_dir, pane)
-  if ok and cwd then
-    if type(cwd) == 'table' and cwd.file_path then return cwd.file_path end
-    if type(cwd) == 'string' and cwd ~= '' then return cwd end
-  end
-
-  local ok2, info = pcall(pane.get_foreground_process_info, pane)
-  if ok2 and info and type(info.cwd) == 'string' and info.cwd ~= '' then
-    return info.cwd
-  end
-
-  return nil
-end
-M.pane_cwd = pane_cwd
+-- Backward-compat re-export so external callers (init.palette_entries,
+-- claude.project_label_for_pane) keep working without churn.
+M.pane_cwd = util.pane_cwd
 
 local function find_existing_pane_in_window(window, root)
   if not window or not root then return nil, nil end
   local ok, mux_window = pcall(wezterm.mux.get_window, window:window_id())
   if not ok or not mux_window then return nil, nil end
-  for _, tab in ipairs(mux_window:tabs()) do
-    for _, pane in ipairs(tab:panes()) do
-      local path = pane_cwd(pane)
-      if path and util.is_inside(path, root) then
-        return tab, pane
-      end
-    end
-  end
+  local found = util.foreach_pane(function(pane)
+    local path = util.pane_cwd(pane)
+    if path and util.is_inside(path, root) then return pane end
+  end, { window = mux_window })
+  if found then return found:tab(), found end
   return nil, nil
 end
 
@@ -164,29 +141,22 @@ function M.current_project_sort()
   return get_sort_mode({})
 end
 
--- Walk every pane in every mux window and count, per project root, how many
--- distinct tabs contain a pane whose CWD lives under that root. Used to
--- mark projects that are already open in the picker.
+-- Per project root, count how many distinct tabs contain a pane whose CWD
+-- lives under that root. Used to mark projects that are already open in
+-- the picker.
 local function count_tabs_per_root(roots_list)
   local seen_tabs = {}
-  local ok_w, windows = pcall(wezterm.mux.all_windows)
-  if not ok_w then return {} end
-  for _, win in ipairs(windows) do
-    for _, tab in ipairs(win:tabs()) do
-      for _, pane in ipairs(tab:panes()) do
-        local cwd = pane_cwd(pane)
-        if cwd then
-          for _, root in ipairs(roots_list) do
-            if util.is_inside(cwd, root) then
-              seen_tabs[root] = seen_tabs[root] or {}
-              seen_tabs[root][tab:tab_id()] = true
-              break
-            end
-          end
-        end
+  util.foreach_pane(function(pane, tab)
+    local cwd = util.pane_cwd(pane)
+    if not cwd then return end
+    for _, root in ipairs(roots_list) do
+      if util.is_inside(cwd, root) then
+        seen_tabs[root] = seen_tabs[root] or {}
+        seen_tabs[root][tab:tab_id()] = true
+        break
       end
     end
-  end
+  end)
   local out = {}
   for root, tabset in pairs(seen_tabs) do
     local n = 0
@@ -331,7 +301,7 @@ end
 -- Logic body for the action picker. Called by the event handler in init.lua.
 function M.run_action_picker(window, pane, opts)
   opts = opts or {}
-  local cwd = pane_cwd(pane)
+  local cwd = util.pane_cwd(pane)
   local root = projects.find_root(cwd) or cwd
   if not root then
     window:toast_notification('termtools',
@@ -473,7 +443,7 @@ function M.run_open_selection(window, pane, opts)
   if not path then path = text end
 
   if not is_absolute(path) then
-    local cwd = pane_cwd(pane)
+    local cwd = util.pane_cwd(pane)
     if cwd then path = util.path_join(cwd, path) end
   end
 
