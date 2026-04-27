@@ -1,6 +1,7 @@
 * Code review of existing LUA to identify bad practices, opportunities for refactoring or code reuse
 * Better project-level documentation of wezterm capabilities via LUA to plan future work
 * Easier workflow to create a new project
+* Suppress missing-font warnings cleanly without locking up wezterm. The probe-and-filter approach (commit 890bf16, reverted) shelled out to `wezterm ls-fonts --list-system` from inside config eval. Two problems: (a) `wezterm.run_child_process` is synchronous and blocks the GUI thread, (b) the child wezterm process re-evaluates the user's wezterm.lua, which calls run_child_process again — fork bomb. Locked up both Windows and macOS instances. **Do not retry this approach without `--skip-config` on the child AND a way to do the probe outside config eval (e.g. lazy first-window event).** The warnings are harmless; the lockup isn't.
 * Support multiple preferred editors (ie vscode, vim/nvim) and the ability to switch or assign them to edit tasks. That way we can easily launch nvim on a file in a new pane for quick inline view
 * Wire up `wezterm-mux-server` so panes survive a GUI restart. Run it as a daemon at login (Task Scheduler on Windows, launchd plist on macOS), expose a unix-domain mux in the wezterm config, and route new spawns through that domain. Lets us reload-vs-restart without losing long-running Claude sessions.
 * Can we make this project's configs editable via wezterm or is that a bad idea. Use Termtools settings UI via JSON sidecar (the VS Code `settings.json` pattern adapted for WezTerm). Sketch:
