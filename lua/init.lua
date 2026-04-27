@@ -36,6 +36,7 @@ local DEFAULTS = {
   claude         = {},  -- forwarded to claude.setup()
   apply_style    = false, -- apply opinionated wezterm appearance/behaviour defaults
   style          = {},    -- per-key overrides; see lua/style.lua
+  project_sort   = 'smart', -- 'smart' | 'alphabetical' | 'mru'; runtime cycle persists in wezterm.GLOBAL
 }
 
 local function default_shell()

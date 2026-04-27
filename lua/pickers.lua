@@ -116,6 +116,148 @@ function M.list_actions(root, opts)
   return out
 end
 
+-- ── Project picker state (persisted in wezterm.GLOBAL) ─────────────────────
+-- MRU and the runtime sort-mode override survive config reloads but reset
+-- on a full WezTerm restart. Persisting to disk is a TODO.
+
+local SORT_MODES = { 'smart', 'alphabetical', 'mru' }
+local MRU_CAP = 20
+
+local function global_table()
+  wezterm.GLOBAL = wezterm.GLOBAL or {}
+  return wezterm.GLOBAL
+end
+
+local function mru_get()
+  return global_table().termtools_project_mru or {}
+end
+
+local function mru_push(path)
+  if not path or path == '' then return end
+  local mru = mru_get()
+  local out = { path }
+  for _, p in ipairs(mru) do
+    if p ~= path and #out < MRU_CAP then out[#out + 1] = p end
+  end
+  global_table().termtools_project_mru = out
+end
+
+local function get_sort_mode(opts)
+  return global_table().termtools_project_sort or opts.project_sort or 'smart'
+end
+
+-- Cycle through SORT_MODES; returns the new mode for caller to surface.
+function M.cycle_project_sort()
+  local current = get_sort_mode({})
+  for i, mode in ipairs(SORT_MODES) do
+    if mode == current then
+      local nxt = SORT_MODES[(i % #SORT_MODES) + 1]
+      global_table().termtools_project_sort = nxt
+      return nxt
+    end
+  end
+  global_table().termtools_project_sort = 'smart'
+  return 'smart'
+end
+
+function M.current_project_sort()
+  return get_sort_mode({})
+end
+
+-- Walk every pane in every mux window and count, per project root, how many
+-- distinct tabs contain a pane whose CWD lives under that root. Used to
+-- mark projects that are already open in the picker.
+local function count_tabs_per_root(roots_list)
+  local seen_tabs = {}
+  local ok_w, windows = pcall(wezterm.mux.all_windows)
+  if not ok_w then return {} end
+  for _, win in ipairs(windows) do
+    for _, tab in ipairs(win:tabs()) do
+      for _, pane in ipairs(tab:panes()) do
+        local cwd = pane_cwd(pane)
+        if cwd then
+          for _, root in ipairs(roots_list) do
+            if util.is_inside(cwd, root) then
+              seen_tabs[root] = seen_tabs[root] or {}
+              seen_tabs[root][tab:tab_id()] = true
+              break
+            end
+          end
+        end
+      end
+    end
+  end
+  local out = {}
+  for root, tabset in pairs(seen_tabs) do
+    local n = 0
+    for _ in pairs(tabset) do n = n + 1 end
+    out[root] = n
+  end
+  return out
+end
+
+local function sort_entries(entries, mode, tabs_count, mru_positions)
+  if mode == 'alphabetical' then
+    table.sort(entries, function(a, b) return a.name:lower() < b.name:lower() end)
+  elseif mode == 'mru' then
+    table.sort(entries, function(a, b)
+      local ap = mru_positions[a.path] or math.huge
+      local bp = mru_positions[b.path] or math.huge
+      if ap ~= bp then return ap < bp end
+      return a.name:lower() < b.name:lower()
+    end)
+  else
+    -- smart: MRU first (in MRU order), then has-tabs, then alphabetical.
+    table.sort(entries, function(a, b)
+      local ap = mru_positions[a.path]
+      local bp = mru_positions[b.path]
+      if ap and bp then return ap < bp end
+      if ap then return true end
+      if bp then return false end
+      local at = (tabs_count[a.path] or 0) > 0
+      local bt = (tabs_count[b.path] or 0) > 0
+      if at ~= bt then return at end
+      return a.name:lower() < b.name:lower()
+    end)
+  end
+end
+
+local PICKER_COLOR = {
+  marker_open   = '#86efac', -- soft green
+  marker_closed = '#586e75', -- solarized base01 (dim)
+  name_mru      = '#fbbf24', -- amber, calls out the recently-used row
+  path          = '#93a1a1', -- solarized base1 (muted)
+  count         = '#586e75', -- same as closed marker
+}
+
+local function format_project_label(entry, count, is_mru, name_w)
+  local marker = count > 0 and '●' or '○'
+  local marker_color = count > 0 and PICKER_COLOR.marker_open or PICKER_COLOR.marker_closed
+  local count_str = ''
+  if count == 1 then count_str = '  · open'
+  elseif count > 1 then count_str = '  · ' .. count .. ' tabs' end
+
+  local fmt = {
+    { Foreground = { Color = marker_color } },
+    { Text = marker .. '  ' },
+  }
+  if is_mru then
+    fmt[#fmt + 1] = { Foreground = { Color = PICKER_COLOR.name_mru } }
+  else
+    fmt[#fmt + 1] = 'ResetAttributes'
+  end
+  fmt[#fmt + 1] = { Text = string.format('%-' .. name_w .. 's', entry.name) }
+  fmt[#fmt + 1] = 'ResetAttributes'
+  fmt[#fmt + 1] = { Foreground = { Color = PICKER_COLOR.path } }
+  fmt[#fmt + 1] = { Text = '  ' .. entry.path }
+  if count_str ~= '' then
+    fmt[#fmt + 1] = { Foreground = { Color = PICKER_COLOR.count } }
+    fmt[#fmt + 1] = { Text = count_str }
+  end
+  fmt[#fmt + 1] = 'ResetAttributes'
+  return wezterm.format(fmt)
+end
+
 -- Logic body for the project picker. Called by the event handler in init.lua.
 function M.run_project_picker(window, pane, opts)
   opts = opts or {}
@@ -127,23 +269,40 @@ function M.run_project_picker(window, pane, opts)
     return
   end
 
+  -- Snapshot tab counts and MRU once per picker open; sort accordingly.
+  local roots = {}
+  for _, e in ipairs(list) do roots[#roots + 1] = e.path end
+  local tabs_count = count_tabs_per_root(roots)
+  local mru_positions = {}
+  for i, p in ipairs(mru_get()) do mru_positions[p] = i end
+
+  local mode = get_sort_mode(opts)
+  sort_entries(list, mode, tabs_count, mru_positions)
+
+  local name_w = 0
+  for _, e in ipairs(list) do if #e.name > name_w then name_w = #e.name end end
+
   local choices = {}
   for i, entry in ipairs(list) do
+    local count = tabs_count[entry.path] or 0
+    local is_mru = mru_positions[entry.path] ~= nil
     choices[i] = {
       id = tostring(i),
-      label = string.format('%-24s  %s', entry.name, entry.path),
+      label = format_project_label(entry, count, is_mru, name_w),
     }
   end
 
   window:perform_action(
     wezterm.action.InputSelector {
-      title = 'Switch to project',
+      title = string.format('Switch to project  (sort: %s)', mode),
       choices = choices,
       fuzzy = true,
       action = wezterm.action_callback(function(w, p, id, _label)
         if not id then return end
         local entry = list[tonumber(id)]
         if not entry then return end
+
+        mru_push(entry.path)
 
         local tab, _existing_pane = find_existing_pane_in_window(w, entry.path)
         if tab then

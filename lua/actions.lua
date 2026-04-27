@@ -130,6 +130,19 @@ function M.catalogue(opts)
         end
       end,
     },
+    {
+      label = 'Cycle project sort',
+      description = function()
+        return 'currently: ' .. require('pickers').current_project_sort()
+      end,
+      run = function(window, _pane, _root)
+        local new_mode = require('pickers').cycle_project_sort()
+        if window then
+          window:toast_notification('termtools',
+            'Project sort: ' .. new_mode, nil, 1500)
+        end
+      end,
+    },
   }
 
   -- One "New tab: <profile>" per non-hidden Windows Terminal profile when

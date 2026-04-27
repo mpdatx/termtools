@@ -1,4 +1,3 @@
-* Project picker should have sorting options you can cycle through; default should surface the most recently selected to the top, then those where tabs are open, then the rest. If a project is found in an existing tab, make sure to label the option accordingly. also, can we have some nicer colors in the project picer?
 * Code review of existing LUA to identify bad practices, opportunities for refactoring or code reuse
 * Better project-level documentation of wezterm capabilities via LUA to plan future work
 * Easier workflow to create a new project

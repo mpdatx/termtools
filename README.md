@@ -99,6 +99,7 @@ The palette entries are computed per palette-open, so they always reflect the ac
 | `wt_profiles`   | `false`                  | Read Windows Terminal's `settings.json`: use the default profile as `default_cmd` (if not set) and add a `New tab: <profile>` action per non-hidden profile. |
 | `apply_style`   | `false`                  | Apply opinionated WezTerm appearance + behaviour defaults from `lua/style.lua` (font, color scheme, cursor, padding, tab-title format, copy-on-select, …). Per-key overrides go in `style = { … }`. |
 | `style`         | `{}`                     | Per-key overrides for the style defaults (only consulted when `apply_style=true`). E.g. `style = { color_scheme = 'Tokyo Night', font_size = 12.5 }`. See `lua/style.lua` for the full set of keys. |
+| `project_sort`  | `'smart'`                | Initial sort for the project picker — `'smart'` (MRU first, then has-tabs, then alphabetical), `'alphabetical'`, or `'mru'`. The "Cycle project sort" action in the action picker overrides this at runtime; the override persists in `wezterm.GLOBAL` (survives reloads, resets on full restart). |
 | `default_keys`  | `false`                  | Auto-bind `project_key` / `action_key` to the pickers. |
 | `project_key`   | `{ key='p', mods='CTRL' }`       | Hotkey for the project picker (only used if `default_keys=true`). |
 | `action_key`    | `{ key='A', mods='CTRL\|SHIFT' }` | Hotkey for the action picker (only used if `default_keys=true`). When `SHIFT` is in `mods`, use the uppercase letter — shift-held keypresses are uppercase, lowercase won't match. |
@@ -118,6 +119,7 @@ If you want to bind the hotkeys yourself (e.g. behind a leader key), set `defaul
 | `New shell pane`             | Splits active pane down; runs `default_cmd` with cwd at root. |
 | `New tab at project root`    | Spawns a new tab at root running `default_cmd`. |
 | `Refresh projects`           | Invalidates the discovery cache. |
+| `Cycle project sort`         | Cycle the project picker's sort mode (smart → alphabetical → mru → smart). Toasts the new mode; persists in `wezterm.GLOBAL`. |
 | `New tab: <profile>` (×N)    | One per Windows Terminal profile when `wt_profiles = true`. Currently commented out in `lua/actions.lua`; uncomment the block at the bottom to re-enable. |
 
 Each action also has a short **description** that appears alongside its label in the picker (e.g. the actual editor command, the cmdline of a spawned profile). Fuzzy filter matches against both columns.
