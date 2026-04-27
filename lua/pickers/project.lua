@@ -1,0 +1,235 @@
+-- termtools.pickers.project — the project picker.
+--
+-- Owns project picker UI, sort state (in wezterm.GLOBAL), MRU tracking,
+-- and tab-counting for "is this project already open" decoration.
+--
+-- Public surface:
+--   M.run(window, pane, opts)  the body called by the wezterm event handler
+--   M.cycle_sort()             advance to the next sort mode; returns it
+--   M.current_sort()           read the active sort mode
+
+local wezterm  = require('wezterm')
+local util     = require('util')
+local projects = require('projects')
+
+local M = {}
+
+-- ── Persisted state (wezterm.GLOBAL) ─────────────────────────────────────
+-- Survives config reloads, resets on full WezTerm restart. Persisting to
+-- disk is a TODO.
+
+local SORT_MODES = { 'smart', 'alphabetical', 'mru' }
+local MRU_CAP = 20
+
+local function global_table()
+  wezterm.GLOBAL = wezterm.GLOBAL or {}
+  return wezterm.GLOBAL
+end
+
+local function mru_get()
+  return global_table().termtools_project_mru or {}
+end
+
+local function mru_push(path)
+  if not path or path == '' then return end
+  local mru = mru_get()
+  local out = { path }
+  for _, p in ipairs(mru) do
+    if p ~= path and #out < MRU_CAP then out[#out + 1] = p end
+  end
+  global_table().termtools_project_mru = out
+end
+
+local function get_sort_mode(opts)
+  return global_table().termtools_project_sort or opts.project_sort or 'smart'
+end
+
+function M.cycle_sort()
+  local current = get_sort_mode({})
+  for i, mode in ipairs(SORT_MODES) do
+    if mode == current then
+      local nxt = SORT_MODES[(i % #SORT_MODES) + 1]
+      global_table().termtools_project_sort = nxt
+      return nxt
+    end
+  end
+  global_table().termtools_project_sort = 'smart'
+  return 'smart'
+end
+
+function M.current_sort()
+  return get_sort_mode({})
+end
+
+-- ── Helpers ──────────────────────────────────────────────────────────────
+
+local function find_existing_pane_in_window(window, root)
+  if not window or not root then return nil, nil end
+  local ok, mux_window = pcall(wezterm.mux.get_window, window:window_id())
+  if not ok or not mux_window then return nil, nil end
+  local found = util.foreach_pane(function(pane)
+    local path = util.pane_cwd(pane)
+    if path and util.is_inside(path, root) then return pane end
+  end, { window = mux_window })
+  if found then return found:tab(), found end
+  return nil, nil
+end
+
+-- Per project root, count how many distinct tabs contain a pane whose CWD
+-- lives under that root. Used to mark projects already open in the picker.
+local function count_tabs_per_root(roots_list)
+  local seen_tabs = {}
+  util.foreach_pane(function(pane, tab)
+    local cwd = util.pane_cwd(pane)
+    if not cwd then return end
+    for _, root in ipairs(roots_list) do
+      if util.is_inside(cwd, root) then
+        seen_tabs[root] = seen_tabs[root] or {}
+        seen_tabs[root][tab:tab_id()] = true
+        break
+      end
+    end
+  end)
+  local out = {}
+  for root, tabset in pairs(seen_tabs) do
+    local n = 0
+    for _ in pairs(tabset) do n = n + 1 end
+    out[root] = n
+  end
+  return out
+end
+
+local function sort_entries(entries, mode, tabs_count, mru_positions)
+  if mode == 'alphabetical' then
+    table.sort(entries, function(a, b) return a.name:lower() < b.name:lower() end)
+  elseif mode == 'mru' then
+    table.sort(entries, function(a, b)
+      local ap = mru_positions[a.path] or math.huge
+      local bp = mru_positions[b.path] or math.huge
+      if ap ~= bp then return ap < bp end
+      return a.name:lower() < b.name:lower()
+    end)
+  else
+    -- smart: MRU first (in MRU order), then has-tabs, then alphabetical.
+    table.sort(entries, function(a, b)
+      local ap = mru_positions[a.path]
+      local bp = mru_positions[b.path]
+      if ap and bp then return ap < bp end
+      if ap then return true end
+      if bp then return false end
+      local at = (tabs_count[a.path] or 0) > 0
+      local bt = (tabs_count[b.path] or 0) > 0
+      if at ~= bt then return at end
+      return a.name:lower() < b.name:lower()
+    end)
+  end
+end
+
+local PICKER_COLOR = {
+  marker_open   = '#86efac', -- soft green
+  marker_closed = '#586e75', -- solarized base01 (dim)
+  name_mru      = '#fbbf24', -- amber, calls out the recently-used row
+  path          = '#93a1a1', -- solarized base1 (muted)
+  count         = '#586e75', -- same as closed marker
+}
+
+local function format_label(entry, count, is_mru, name_w)
+  local marker = count > 0 and '●' or '○'
+  local marker_color = count > 0 and PICKER_COLOR.marker_open or PICKER_COLOR.marker_closed
+  local count_str = ''
+  if count == 1 then count_str = '  · open'
+  elseif count > 1 then count_str = '  · ' .. count .. ' tabs' end
+
+  local fmt = {
+    { Foreground = { Color = marker_color } },
+    { Text = marker .. '  ' },
+  }
+  if is_mru then
+    fmt[#fmt + 1] = { Foreground = { Color = PICKER_COLOR.name_mru } }
+  else
+    fmt[#fmt + 1] = 'ResetAttributes'
+  end
+  fmt[#fmt + 1] = { Text = string.format('%-' .. name_w .. 's', entry.name) }
+  fmt[#fmt + 1] = 'ResetAttributes'
+  fmt[#fmt + 1] = { Foreground = { Color = PICKER_COLOR.path } }
+  fmt[#fmt + 1] = { Text = '  ' .. entry.path }
+  if count_str ~= '' then
+    fmt[#fmt + 1] = { Foreground = { Color = PICKER_COLOR.count } }
+    fmt[#fmt + 1] = { Text = count_str }
+  end
+  fmt[#fmt + 1] = 'ResetAttributes'
+  return wezterm.format(fmt)
+end
+
+-- ── Run ──────────────────────────────────────────────────────────────────
+
+function M.run(window, pane, opts)
+  opts = opts or {}
+  local list = projects.discover(opts)
+  if #list == 0 then
+    window:toast_notification('termtools',
+      'No projects discovered. Set scan_roots or pinned in setup({}).',
+      nil, 4000)
+    return
+  end
+
+  -- Snapshot tab counts and MRU once per picker open; sort accordingly.
+  local roots = {}
+  for _, e in ipairs(list) do roots[#roots + 1] = e.path end
+  local tabs_count = count_tabs_per_root(roots)
+  local mru_positions = {}
+  for i, p in ipairs(mru_get()) do mru_positions[p] = i end
+
+  local mode = get_sort_mode(opts)
+  sort_entries(list, mode, tabs_count, mru_positions)
+
+  local name_w = 0
+  for _, e in ipairs(list) do if #e.name > name_w then name_w = #e.name end end
+
+  local choices = {}
+  for i, entry in ipairs(list) do
+    local count = tabs_count[entry.path] or 0
+    local is_mru = mru_positions[entry.path] ~= nil
+    choices[i] = {
+      id = tostring(i),
+      label = format_label(entry, count, is_mru, name_w),
+    }
+  end
+
+  window:perform_action(
+    wezterm.action.InputSelector {
+      title = string.format('Switch to project  (sort: %s)', mode),
+      choices = choices,
+      fuzzy = true,
+      action = wezterm.action_callback(function(w, p, id, _label)
+        if not id then return end
+        local entry = list[tonumber(id)]
+        if not entry then return end
+
+        mru_push(entry.path)
+
+        local tab, _existing_pane = find_existing_pane_in_window(w, entry.path)
+        if tab then
+          tab:activate()
+          return
+        end
+
+        local override = projects.load_overrides(entry.path, opts.trusted_paths)
+        local cmd = (override and override.default_cmd) or opts.default_cmd
+        -- Re-fetch the active pane: the `p` we were handed when the picker
+        -- opened may have been closed by the time the user confirms.
+        local target_pane = w:active_pane() or p
+        w:perform_action(
+          wezterm.action.SpawnCommandInNewTab {
+            cwd = entry.path,
+            args = cmd,
+          },
+          target_pane
+        )
+      end),
+    },
+    pane
+  )
+end
+
+return M

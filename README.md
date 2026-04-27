@@ -237,9 +237,14 @@ lua/
   init.lua       public API
   projects.lua   root resolver + discovery + override loader
   actions.lua    built-in action catalogue
-  pickers.lua    InputSelector wrappers for the two hotkeys
-  util.lua       generic path helpers (delegates platform specifics)
-  claude.lua    multi-session Claude awareness (opt-in via claude_indicators)
+  pickers.lua    facade re-exporting the picker submodules
+  pickers/
+    project.lua  project picker, sort modes, MRU, tab-counting
+    action.lua   action picker, list_actions, run-by-label
+  open_selection.lua  Ctrl+Shift+Click / hotkey "open path in editor"
+  util.lua       generic path/fs helpers (delegates platform specifics);
+                 hosts util.foreach_pane and util.pane_cwd
+  claude.lua     multi-session Claude awareness (opt-in via claude_indicators)
   style.lua      opinionated appearance/behaviour defaults (opt-in via apply_style)
   wt.lua         Windows Terminal settings.json reader (opt-in via wt_profiles)
   platform.lua   dispatcher that picks the per-OS backend
