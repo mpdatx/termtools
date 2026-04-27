@@ -177,9 +177,8 @@ dofile(wezterm.home_dir .. '/projects/termtools/include.lua')(config, {
 What you get:
 
 - **Per-tab state glyph.** Every tab whose foreground pane is running `claude` gets a glyph next to its title:
-  - `↻` working (the buffer shows "esc to interrupt")
-  - `✱` waiting on input
-  - `⚠` waiting longer than `idle_too_long_s` (default 5 minutes) — "have you forgotten about me?"
+  - `↻` working (the buffer shows "esc to interrupt" or a braille spinner)
+  - `✱` idle (waiting on input — includes long-idle sessions; the age distinction is reserved for the session picker)
 
   termtools doesn't register its own `format-tab-title` (that would clash with your existing one). Instead expose a helper:
 
@@ -191,9 +190,9 @@ What you get:
   end)
   ```
 
-- **Status-bar summary** in the right status (`window:set_right_status`) showing aggregate counts: `↻ 3   ✱ 1   ⚠ 1`. Empty when no Claude panes are open.
+- **Status-bar summary** showing aggregate counts: `↻ 3   ✱ 4`. Empty when no Claude panes are open. Working / idle is the only distinction here — the age detail (`⚠` stuck) is preserved internally and surfaced inside the session picker so the bar stays calm. Position via `status_position = 'left' | 'right' | 'both'`.
 
-- **`Ctrl+Shift+J`** (when `default_keys = true`) cycles focus through panes that are waiting or stuck. Toasts "no Claude session is currently waiting" if none. The hotkey is configurable via `claude_next_key`.
+- **`Ctrl+Shift+J`** (when `default_keys = true`) opens a **session picker** — an InputSelector listing every Claude pane with project, state, age, and pane-id. Selecting one focuses it. Working sessions sort first; idle sessions follow newest-first, with sessions older than `idle_too_long_s` rendered dim/grey but still selectable. The hotkey is configurable via `claude_next_key`. (For a "cycle to next waiting" alternative, bind `termtools.claude` module's `next_waiting_action()` directly.)
 
 Tunable inside `claude = { … }` in setup opts (forwarded to the module's defaults):
 

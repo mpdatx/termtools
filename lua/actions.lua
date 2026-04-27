@@ -140,24 +140,24 @@ function M.catalogue(opts)
     },
   }
 
-  -- Per-WT-profile "New tab: <profile>" entries — kept disabled for now.
-  -- Uncomment to surface every non-hidden Windows Terminal profile as a
-  -- discrete action that spawns a tab using its commandline.
-  -- if opts._wt and type(opts._wt.list) == 'table' then
-  --   for _, profile in ipairs(opts._wt.list) do
-  --     local args = profile.args
-  --     local args_str = table.concat(args, ' ')
-  --     list[#list + 1] = {
-  --       label = 'New tab: ' .. profile.name,
-  --       description = args_str,
-  --       run = function(window, pane, root)
-  --         window:perform_action(act.SpawnCommandInNewTab {
-  --           cwd = root, args = args,
-  --         }, pane)
-  --       end,
-  --     }
-  --   end
-  -- end
+  -- One "New tab: <profile>" per non-hidden Windows Terminal profile when
+  -- wt_profiles is enabled. Appended after built-ins so they don't crowd
+  -- the top of the picker; fuzzy filter handles long lists.
+  if opts._wt and type(opts._wt.list) == 'table' then
+    for _, profile in ipairs(opts._wt.list) do
+      local args = profile.args
+      local args_str = table.concat(args, ' ')
+      list[#list + 1] = {
+        label = 'New tab: ' .. profile.name,
+        description = args_str,
+        run = function(window, pane, root)
+          window:perform_action(act.SpawnCommandInNewTab {
+            cwd = root, args = args,
+          }, pane)
+        end,
+      }
+    end
+  end
 
   return list
 end

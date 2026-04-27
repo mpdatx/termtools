@@ -206,7 +206,7 @@ function M.apply(config)
     if o._claude and o.claude_next_key then
       table.insert(config.keys, {
         key = o.claude_next_key.key, mods = o.claude_next_key.mods,
-        action = o._claude.next_waiting_action(),
+        action = o._claude.session_picker_action(),
       })
     end
   end

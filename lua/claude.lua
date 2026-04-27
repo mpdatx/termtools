@@ -128,9 +128,7 @@ end
 function M.glyph_for_pane(pane_id)
   local entry = state[pane_id]
   if not entry then return nil end
-  local s = effective_state(entry)
-  if s == 'working' then return opts.glyph_working end
-  if s == 'stuck'   then return opts.glyph_stuck end
+  if entry.state == 'working' then return opts.glyph_working end
   return opts.glyph_waiting
 end
 
@@ -149,7 +147,11 @@ end
 
 local function summary_format()
   local c = M.counts()
-  if c.working + c.waiting + c.stuck == 0 then return nil end
+  -- Status bar collapses waiting + stuck into one "idle" bucket. The age
+  -- distinction is preserved in the underlying state and surfaced by the
+  -- session picker.
+  local idle = c.waiting + c.stuck
+  if c.working + idle == 0 then return nil end
   local out = { { Attribute = { Intensity = 'Bold' } } }
   local function push(color, glyph, n)
     if n <= 0 then return end
@@ -157,9 +159,7 @@ local function summary_format()
     out[#out + 1] = { Text = string.format(' %s %d ', glyph, n) }
   end
   push(opts.status_color.working, opts.glyph_working, c.working)
-  push(opts.status_color.waiting, opts.glyph_waiting, c.waiting)
-  push(opts.status_color.stuck,   opts.glyph_stuck,   c.stuck)
-  -- Subtle separator before the tab bar starts, only on left positioning.
+  push(opts.status_color.waiting, opts.glyph_waiting, idle)
   if opts.status_position == 'left' or opts.status_position == 'both' then
     out[#out + 1] = { Foreground = { Color = opts.status_separator_color } }
     out[#out + 1] = { Text = ' ▏ ' }
@@ -201,6 +201,109 @@ function M.next_waiting_action()
   return wezterm.action.EmitEvent 'termtools.claude-next-waiting'
 end
 
+local function format_age(secs)
+  if secs < 60   then return string.format('%ds', secs) end
+  if secs < 3600 then return string.format('%dm', math.floor(secs / 60)) end
+  return string.format('%dh', math.floor(secs / 3600))
+end
+
+local function project_label_for_pane(pane)
+  local cwd
+  local ok_pickers, pickers = pcall(require, 'pickers')
+  if ok_pickers and pickers.pane_cwd then
+    cwd = pickers.pane_cwd(pane)
+  end
+  if not cwd then return '?' end
+  local ok_projects, projects = pcall(require, 'projects')
+  local root = ok_projects and projects.find_root(cwd) or cwd
+  return root:match('([^/\\]+)$') or root
+end
+
+-- Open an InputSelector listing every Claude pane with project, state,
+-- duration and pane-id. Selecting one focuses it. Working sessions sort
+-- first; idle sessions follow, sorted youngest-first; sessions older than
+-- `idle_too_long_s` are rendered dim/grey but remain selectable.
+function M.run_session_picker(window, pane)
+  if next(state) == nil then
+    window:toast_notification('termtools',
+      'No Claude sessions detected.', nil, 1500)
+    return
+  end
+
+  local now = os.time()
+  local items = {}
+  for pid, entry in pairs(state) do
+    items[#items + 1] = {
+      pid = pid, entry = entry,
+      proj = project_label_for_pane(entry.pane),
+      age  = now - entry.since,
+    }
+  end
+
+  -- Working first, then idle by age (newest first); old/stuck idle sink to
+  -- the bottom of their bucket via the dim style alone.
+  table.sort(items, function(a, b)
+    if a.entry.state ~= b.entry.state then
+      return a.entry.state == 'working'
+    end
+    return a.age < b.age
+  end)
+
+  local proj_w = 0
+  for _, it in ipairs(items) do
+    if #it.proj > proj_w then proj_w = #it.proj end
+  end
+
+  local choices = {}
+  for i, it in ipairs(items) do
+    local glyph = it.entry.state == 'working'
+      and opts.glyph_working or opts.glyph_waiting
+    local plain = string.format('%s  %-' .. proj_w .. 's   %5s   pane %d',
+      glyph, it.proj, format_age(it.age), it.pid)
+    local is_old = it.entry.state ~= 'working' and it.age >= opts.idle_too_long_s
+    local label
+    if is_old then
+      label = wezterm.format {
+        { Attribute = { Intensity = 'Half' } },
+        { Foreground = { AnsiColor = 'Grey' } },
+        { Text = plain },
+      }
+    else
+      label = plain
+    end
+    choices[i] = { id = tostring(i), label = label }
+  end
+
+  window:perform_action(
+    wezterm.action.InputSelector {
+      title = 'Claude sessions',
+      choices = choices,
+      fuzzy = true,
+      action = wezterm.action_callback(function(w, _p, id, _label)
+        if not id then return end
+        local it = items[tonumber(id)]
+        if not it or not it.entry.pane then return end
+        local target = it.entry.pane
+        local tab = target:tab()
+        if tab then tab:activate() end
+        target:activate()
+        if tab then
+          local mw = tab:window()
+          if mw and mw.gui_window then
+            local gui = mw:gui_window()
+            if gui then pcall(gui.focus, gui) end
+          end
+        end
+      end),
+    },
+    pane
+  )
+end
+
+function M.session_picker_action()
+  return wezterm.action.EmitEvent 'termtools.claude-session-picker'
+end
+
 function M.setup(user_opts)
   opts = {}
   for k, v in pairs(DEFAULTS) do opts[k] = v end
@@ -237,6 +340,10 @@ function M.attach(config)
       window:toast_notification('termtools',
         'No Claude session is currently waiting.', nil, 1500)
     end
+  end)
+
+  wezterm.on('termtools.claude-session-picker', function(window, pane)
+    M.run_session_picker(window, pane)
   end)
 end
 
