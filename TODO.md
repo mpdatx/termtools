@@ -1,9 +1,9 @@
 * Code review of existing LUA to identify bad practices, opportunities for refactoring or code reuse
 * Better project-level documentation of wezterm capabilities via LUA to plan future work
 * Easier workflow to create a new project
-* Can we make this project's configs editable via wezterm or is that a bad idea?
+* Support multiple preferred editors (ie vscode, vim/nvim) and the ability to switch or assign them to edit tasks. That way we can easily launch nvim on a file in a new pane for quick inline view
 * Wire up `wezterm-mux-server` so panes survive a GUI restart. Run it as a daemon at login (Task Scheduler on Windows, launchd plist on macOS), expose a unix-domain mux in the wezterm config, and route new spawns through that domain. Lets us reload-vs-restart without losing long-running Claude sessions.
-* Termtools settings UI via JSON sidecar (the VS Code `settings.json` pattern adapted for WezTerm). Sketch:
+* Can we make this project's configs editable via wezterm or is that a bad idea. Use Termtools settings UI via JSON sidecar (the VS Code `settings.json` pattern adapted for WezTerm). Sketch:
   * Sidecar at `~/.config/termtools/settings.json` holding a flat map of opt overrides (`{"apply_style": true, "claude_indicators": true, "style": {"color_scheme": "Tokyo Night"}}`).
   * `init.setup()` reads the sidecar at config-reload time and merges it on top of the user's inline opts (sidecar wins, since it's the "live edited" surface).
   * New action: `Termtools settings` — top-level entry in the action picker. Opens an `InputSelector` listing every opt with `<key>: <current value>`. Selecting one routes by type:
