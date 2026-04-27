@@ -1,7 +1,8 @@
 -- termtools.projects — project root resolution, discovery, and per-project
 -- override loading.
 
-local util = require('util')
+local util     = require('util')
+local platform = require('platform')
 
 local M = {}
 
@@ -76,7 +77,7 @@ function M.discover(opts)
 
   local function add(path, source)
     local norm = util.normalize(path)
-    local key = util.is_windows and norm:lower() or norm
+    local key = platform.fs_case_insensitive and norm:lower() or norm
     if seen[key] then return end
     local entry = { path = norm, name = util.basename(norm), source = source }
     seen[key] = entry

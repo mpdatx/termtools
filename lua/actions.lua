@@ -11,24 +11,16 @@
 --                  states like "file doesn't exist yet but the editor will
 --                  create it on save".
 
-local wezterm = require('wezterm')
-local act = wezterm.action
-local util = require('util')
+local wezterm  = require('wezterm')
+local act      = wezterm.action
+local util     = require('util')
+local platform = require('platform')
 
 local M = {}
 
 local function open_in_editor(target, editor_cmd)
   local template = editor_cmd or { 'code', '%s' }
-  local args = util.format_cmd(template, target)
-  -- Windows: CreateProcess (used by background_child_process) only appends
-  -- .exe when the program name has no extension — it doesn't honour
-  -- PATHEXT. Many editors ship as .cmd shims (code.cmd, idea.cmd, etc.) so
-  -- the bare spawn fails silently. Route through cmd.exe to get proper
-  -- PATHEXT resolution.
-  if util.is_windows then
-    table.insert(args, 1, '/c')
-    table.insert(args, 1, 'cmd.exe')
-  end
+  local args = platform.editor_launch_args(util.format_cmd(template, target))
   local ok, err = pcall(wezterm.background_child_process, args)
   if not ok then
     wezterm.log_error('termtools: editor launch failed: ' .. tostring(err))

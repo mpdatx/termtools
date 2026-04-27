@@ -1,21 +1,26 @@
--- termtools.util — small path/fs helpers used across the package.
+-- termtools.util — generic path/fs helpers. The few operations that diverge
+-- per OS (drive-letter handling, root detection, filesystem case-sensitivity)
+-- are delegated to lua/platform/<os>.lua via lua/platform.lua.
+
+local platform = require('platform')
 
 local M = {}
 
-M.is_windows = package.config:sub(1, 1) == '\\'
+M.is_windows = platform.is_windows
+M.is_macos   = platform.is_macos
 
 -- Convert backslashes to forward slashes, collapse `//`, drop trailing slash
--- (except at a root like `/` or `C:/`), and uppercase the drive letter on
--- Windows so paths compare equal regardless of how the user typed them.
+-- except where the platform wants it preserved (e.g. `C:/` on Windows), and
+-- apply per-platform normalisation (drive-letter case on Windows, identity
+-- on macOS).
 function M.normalize(path)
   if not path or path == '' then return path end
   local p = path:gsub('\\', '/'):gsub('//+', '/')
-  if M.is_windows then
-    p = p:gsub('^(%a):', function(c) return c:upper() .. ':' end)
-  end
+  p = platform.normalize_path(p)
   if #p > 1 and p:sub(-1) == '/' then
-    local is_drive_root = M.is_windows and p:match('^%a:/$')
-    if not is_drive_root then p = p:sub(1, -2) end
+    if not platform.preserve_trailing_slash(p) then
+      p = p:sub(1, -2)
+    end
   end
   return p
 end
@@ -37,7 +42,7 @@ end
 function M.is_inside(child, parent)
   if not child or not parent then return false end
   local c, p = M.normalize(child), M.normalize(parent)
-  if M.is_windows then
+  if platform.fs_case_insensitive then
     c, p = c:lower(), p:lower()
   end
   if c == p then return true end
@@ -46,21 +51,11 @@ function M.is_inside(child, parent)
 end
 
 function M.parent_dir(path)
-  local p = M.normalize(path)
-  if M.is_root(p) then return nil end
-  local idx = p:match('^.*()/')
-  if not idx then return nil end
-  if M.is_windows and idx == 3 and p:sub(2, 2) == ':' then
-    return p:sub(1, 3) -- C:/foo -> C:/
-  end
-  if idx == 1 then return '/' end
-  return p:sub(1, idx - 1)
+  return platform.parent_dir(M.normalize(path))
 end
 
 function M.is_root(path)
-  local p = M.normalize(path)
-  if M.is_windows then return p:match('^%a:/?$') ~= nil end
-  return p == '/'
+  return platform.is_root(M.normalize(path))
 end
 
 function M.file_exists(path)

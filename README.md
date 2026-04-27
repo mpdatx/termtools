@@ -223,8 +223,13 @@ lua/
   projects.lua   root resolver + discovery + override loader
   actions.lua    built-in action catalogue
   pickers.lua    InputSelector wrappers for the two hotkeys
-  util.lua       path helpers
+  util.lua       generic path helpers (delegates platform specifics)
+  claude.lua    multi-session Claude awareness (opt-in via claude_indicators)
   wt.lua         Windows Terminal settings.json reader (opt-in via wt_profiles)
+  platform.lua   dispatcher that picks the per-OS backend
+  platform/
+    windows.lua  Windows backend: drive letters, cmd.exe editor wrap, USERPROFILE
+    darwin.lua   macOS backend: bare argv spawn, $SHELL/$HOME, no drive letters
 examples/
   minimal.wezterm.lua    smallest viable user config (start fresh)
   full.wezterm.lua       every option exposed

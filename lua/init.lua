@@ -37,13 +37,7 @@ local DEFAULTS = {
 }
 
 local function default_shell()
-  local ok, wezterm = pcall(require, 'wezterm')
-  if ok and wezterm.target_triple and wezterm.target_triple:find('windows') then
-    -- powershell.exe (Windows PowerShell 5.1) ships with Windows; pwsh.exe
-    -- (PowerShell 7+) is opt-in. Default to the universal one.
-    return { 'powershell' }
-  end
-  return { os.getenv('SHELL') or '/bin/sh' }
+  return require('platform').default_shell()
 end
 
 local function shallow_merge(dst, src)
@@ -69,14 +63,15 @@ local CANDIDATE_PROJECT_DIRS = {
 -- (optionally extended with your own paths) to get a sensible starting set
 -- without per-OS branching in your config.
 function M.default_scan_roots()
-  local util = require('util')
-  local home = os.getenv('USERPROFILE') or os.getenv('HOME')
+  local util     = require('util')
+  local platform = require('platform')
+  local home = platform.home_dir()
   if not home then return {} end
 
   local result, seen = {}, {}
   for _, candidate in ipairs(CANDIDATE_PROJECT_DIRS) do
     local expanded = util.normalize((candidate:gsub('^~', home)))
-    local key = util.is_windows and expanded:lower() or expanded
+    local key = platform.fs_case_insensitive and expanded:lower() or expanded
     if not seen[key] and util.dir_exists(expanded) then
       seen[key] = true
       result[#result + 1] = expanded

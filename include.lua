@@ -35,7 +35,10 @@ return function(config, opts)
   -- Clear cached termtools modules so a wezterm config reload picks up
   -- edits to the lua/ files. Without this, require() returns the version
   -- Lua interned at first load and edits silently no-op.
-  for _, name in ipairs({ 'init', 'pickers', 'projects', 'actions', 'util', 'wt', 'claude' }) do
+  for _, name in ipairs({
+    'init', 'pickers', 'projects', 'actions', 'util', 'wt', 'claude',
+    'platform', 'platform.windows', 'platform.darwin',
+  }) do
     package.loaded[name] = nil
   end
   local termtools = require('init')
