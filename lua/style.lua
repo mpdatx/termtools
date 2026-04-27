@@ -13,8 +13,16 @@ local M = {}
 local DEFAULTS = {
   -- Font: try the patched Nerd-Font first (gives icon glyphs the command
   -- palette uses), fall back to plain Fira Code, then to wezterm's bundled
-  -- JetBrains Mono. Size and other faces inherit wezterm's defaults.
-  font_family_with_fallback = { 'FiraCode NF', 'Fira Code', 'JetBrains Mono' },
+  -- JetBrains Mono. Both `FiraCode NF` (Windows naming) and `FiraCode Nerd
+  -- Font` (macOS naming) are listed because the same font registers under
+  -- different family names on different platforms. Size and other faces
+  -- inherit wezterm's defaults.
+  font_family_with_fallback = {
+    'FiraCode NF',
+    'FiraCode Nerd Font',
+    'Fira Code',
+    'JetBrains Mono',
+  },
   font_size                 = 11.0,
 
   -- Solarized Dark — wezterm bundles it under 'Builtin Solarized Dark'.
@@ -68,6 +76,62 @@ local function merge(opts)
   return require('util').merge_defaults(DEFAULTS, opts)
 end
 
+-- Enumerate every font family wezterm can resolve on this machine by
+-- shelling out to `wezterm ls-fonts --list-system` once and parsing the
+-- `wezterm.font("Family", …)` lines out of its dump. Returns a set keyed
+-- by family name, or nil if probing failed (binary not found, parse
+-- error, etc.) — callers should treat nil as "give up, use the
+-- unfiltered list and let wezterm log its own warnings".
+--
+-- The result is cached in `wezterm.GLOBAL` so we only run the child
+-- process once per WezTerm process (survives config reloads).
+local function probe_installed_fonts()
+  wezterm.GLOBAL = wezterm.GLOBAL or {}
+  if wezterm.GLOBAL.termtools_installed_fonts ~= nil then
+    return wezterm.GLOBAL.termtools_installed_fonts or nil
+  end
+
+  local exe_dir = wezterm.executable_dir
+  if not exe_dir then return nil end
+  local exe = exe_dir .. '/wezterm'
+  if (wezterm.target_triple or ''):find('windows') then exe = exe .. '.exe' end
+
+  local ok, success, stdout = pcall(wezterm.run_child_process,
+    { exe, 'ls-fonts', '--list-system' })
+  if not ok or not success or type(stdout) ~= 'string' then
+    -- Cache the failure as `false` so we don't retry on every reload.
+    wezterm.GLOBAL.termtools_installed_fonts = false
+    return nil
+  end
+
+  local set = {}
+  for family in stdout:gmatch('wezterm%.font%("([^"]+)"') do
+    set[family] = true
+  end
+  wezterm.GLOBAL.termtools_installed_fonts = set
+  return set
+end
+
+-- Filter the fallback list down to families wezterm can actually find.
+-- Suppresses the "Unable to load a font specified by your font=…"
+-- warnings that wezterm logs for every missing entry in a font_with_fallback
+-- list, even when a later entry resolves successfully.
+--
+-- Returns the original list if (a) probing failed, or (b) zero candidates
+-- are present — in those cases we want wezterm's warnings to surface so
+-- the misconfiguration is visible.
+local function pick_available_fallback(candidates)
+  if type(candidates) ~= 'table' or #candidates == 0 then return candidates end
+  local installed = probe_installed_fonts()
+  if not installed then return candidates end
+  local out = {}
+  for _, family in ipairs(candidates) do
+    if installed[family] then out[#out + 1] = family end
+  end
+  if #out == 0 then return candidates end
+  return out
+end
+
 local function apply_tab_title_format()
   wezterm.on('format-tab-title', function(tab, _tabs, _panes, _conf, _hover, max_width)
     local termtools = package.loaded['init']
@@ -106,7 +170,8 @@ function M.apply(config, opts)
   local s = merge(opts)
 
   if s.font_family_with_fallback then
-    config.font = wezterm.font_with_fallback(s.font_family_with_fallback)
+    config.font = wezterm.font_with_fallback(
+      pick_available_fallback(s.font_family_with_fallback))
   end
   if s.font_size then config.font_size = s.font_size end
 

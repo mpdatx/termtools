@@ -1,5 +1,4 @@
 * Code review of existing LUA to identify bad practices, opportunities for refactoring or code reuse
-* Add FiraCode Nerd Font to the fallback list since that's how it is named on macos
 * Better project-level documentation of wezterm capabilities via LUA to plan future work
 * Easier workflow to create a new project
 * Support multiple preferred editors (ie vscode, vim/nvim) and the ability to switch or assign them to edit tasks. That way we can easily launch nvim on a file in a new pane for quick inline view
