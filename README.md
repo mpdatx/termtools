@@ -241,9 +241,10 @@ lua/
     windows.lua  Windows backend: drive letters, cmd.exe editor wrap, USERPROFILE
     darwin.lua   macOS backend: bare argv spawn, $SHELL/$HOME, no drive letters
 examples/
-  minimal.wezterm.lua    smallest viable user config (start fresh)
-  full.wezterm.lua       every option exposed
-  example.termtools.lua  drop-in per-project override template
+  minimal.wezterm.lua        smallest viable user config (start fresh)
+  full.wezterm.lua           every option exposed
+  example.termtools.lua      drop-in per-project override template
+  macos/wezterm-focus.lua    Hammerspoon recipe: global hotkey to focus WezTerm
 docs/
   project-overrides.md   spec for .termtools.lua files
   plan.md                design notes
@@ -251,6 +252,6 @@ docs/
 
 ## Non-goals (for v1)
 
-- No global hotkeys: pickers fire only when WezTerm is focused.
+- No global hotkeys built in: pickers fire only when WezTerm is focused. macOS users can wire one with the Hammerspoon recipe at `examples/macos/wezterm-focus.lua` — `dofile` it from `~/.hammerspoon/init.lua` and the script binds `Ctrl+Alt+Cmd+Space` to focus WezTerm. A Windows recipe is not yet shipped.
 - No "send a prompt to the running Claude in the active tab" — out of scope by design.
 - No automated test suite. The surface is small enough that manual verification suffices.
