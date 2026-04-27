@@ -34,6 +34,8 @@ local DEFAULTS = {
   claude_indicators = false, -- multi-session Claude awareness (tab glyphs + status bar + jump-to-waiting)
   claude_next_key = { key = 'J', mods = 'CTRL|SHIFT' },
   claude         = {},  -- forwarded to claude.setup()
+  apply_style    = false, -- apply opinionated wezterm appearance/behaviour defaults
+  style          = {},    -- per-key overrides; see lua/style.lua
 }
 
 local function default_shell()
@@ -182,6 +184,16 @@ local handlers_registered = false
 
 function M.apply(config)
   local o = M.opts()
+
+  -- Apply opinionated style defaults BEFORE keys are wired so any styling
+  -- that touches config.keys / config.mouse_bindings doesn't clobber later
+  -- additions (and vice versa: termtools' own keys append to whatever
+  -- style touches).
+  if o.apply_style then
+    local ok, style = pcall(require, 'style')
+    if ok then style.apply(config, o.style or {}) end
+  end
+
   if o.default_keys then
     config.keys = config.keys or {}
     table.insert(config.keys, {

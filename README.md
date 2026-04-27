@@ -97,6 +97,8 @@ The palette entries are computed per palette-open, so they always reflect the ac
 | `claude_cmd`    | `{ 'claude' }`           | Command for "New Claude pane". |
 | `markers`       | see below                | Override the project-marker list. |
 | `wt_profiles`   | `false`                  | Read Windows Terminal's `settings.json`: use the default profile as `default_cmd` (if not set) and add a `New tab: <profile>` action per non-hidden profile. |
+| `apply_style`   | `false`                  | Apply opinionated WezTerm appearance + behaviour defaults from `lua/style.lua` (font, color scheme, cursor, padding, tab-title format, copy-on-select, …). Per-key overrides go in `style = { … }`. |
+| `style`         | `{}`                     | Per-key overrides for the style defaults (only consulted when `apply_style=true`). E.g. `style = { color_scheme = 'Tokyo Night', font_size = 12.5 }`. See `lua/style.lua` for the full set of keys. |
 | `default_keys`  | `false`                  | Auto-bind `project_key` / `action_key` to the pickers. |
 | `project_key`   | `{ key='p', mods='CTRL' }`       | Hotkey for the project picker (only used if `default_keys=true`). |
 | `action_key`    | `{ key='A', mods='CTRL\|SHIFT' }` | Hotkey for the action picker (only used if `default_keys=true`). When `SHIFT` is in `mods`, use the uppercase letter — shift-held keypresses are uppercase, lowercase won't match. |
@@ -235,6 +237,7 @@ lua/
   pickers.lua    InputSelector wrappers for the two hotkeys
   util.lua       generic path helpers (delegates platform specifics)
   claude.lua    multi-session Claude awareness (opt-in via claude_indicators)
+  style.lua      opinionated appearance/behaviour defaults (opt-in via apply_style)
   wt.lua         Windows Terminal settings.json reader (opt-in via wt_profiles)
   platform.lua   dispatcher that picks the per-OS backend
   platform/

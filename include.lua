@@ -38,7 +38,7 @@ return function(config, opts, install_dir)
   -- edits to the lua/ files. Without this, require() returns the version
   -- Lua interned at first load and edits silently no-op.
   for _, name in ipairs({
-    'init', 'pickers', 'projects', 'actions', 'util', 'wt', 'claude',
+    'init', 'pickers', 'projects', 'actions', 'util', 'wt', 'claude', 'style',
     'platform', 'platform.windows', 'platform.darwin',
   }) do
     package.loaded[name] = nil
