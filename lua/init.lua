@@ -47,11 +47,6 @@ local function default_shell()
   return require('platform').default_shell()
 end
 
-local function shallow_merge(dst, src)
-  for k, v in pairs(src or {}) do dst[k] = v end
-  return dst
-end
-
 local CANDIDATE_PROJECT_DIRS = {
   -- The common conventions across Windows / macOS / Linux. Listed in
   -- approximate frequency-of-use; case variants (~/projects vs ~/Projects)
@@ -91,9 +86,7 @@ local opts = nil
 
 function M.setup(user_opts)
   user_opts = user_opts or {}
-  local merged = {}
-  shallow_merge(merged, DEFAULTS)
-  shallow_merge(merged, user_opts)
+  local merged = require('util').merge_defaults(DEFAULTS, user_opts)
   if merged.wt_profiles then
     local ok, wt = pcall(require, 'wt')
     if ok then

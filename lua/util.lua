@@ -100,6 +100,16 @@ function M.basename(path)
   return p:match('([^/]+)$') or p
 end
 
+-- Returns a fresh table with `defaults` overlaid by `user_opts`. Both args
+-- are optional; nil/missing keys are skipped, so calling with `nil` for
+-- either side returns a safe shallow copy of the other.
+function M.merge_defaults(defaults, user_opts)
+  local merged = {}
+  for k, v in pairs(defaults or {}) do merged[k] = v end
+  for k, v in pairs(user_opts or {}) do merged[k] = v end
+  return merged
+end
+
 -- ── WezTerm-pane helpers ──────────────────────────────────────────────────
 -- These wrap two recurring patterns:
 --   pane_cwd      — resolve a pane's working directory through OSC 7/9;9

@@ -65,10 +65,7 @@ local DEFAULTS = {
 }
 
 local function merge(opts)
-  local merged = {}
-  for k, v in pairs(DEFAULTS) do merged[k] = v end
-  for k, v in pairs(opts or {}) do merged[k] = v end
-  return merged
+  return require('util').merge_defaults(DEFAULTS, opts)
 end
 
 local function apply_tab_title_format()

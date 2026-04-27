@@ -296,9 +296,7 @@ function M.session_picker_action()
 end
 
 function M.setup(user_opts)
-  opts = {}
-  for k, v in pairs(DEFAULTS) do opts[k] = v end
-  for k, v in pairs(user_opts or {}) do opts[k] = v end
+  opts = require('util').merge_defaults(DEFAULTS, user_opts)
 end
 
 local attached = false
