@@ -99,6 +99,10 @@ function M.setup(user_opts)
   if not merged.default_cmd then
     merged.default_cmd = default_shell()
   end
+  -- GUI-launched WezTerm on macOS inherits a stripped PATH, so a bare
+  -- `claude` won't resolve via execvp. Ask the login+interactive shell where
+  -- it lives once and cache the absolute path. No-op on Windows.
+  merged.claude_cmd = require('platform').resolve_argv(merged.claude_cmd)
   if merged.claude_indicators then
     local ok, claude = pcall(require, 'claude')
     if ok then

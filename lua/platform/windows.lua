@@ -27,6 +27,14 @@ function M.editor_launch_args(args)
   return out
 end
 
+-- Pane spawns inherit the user's PATH from the GUI process on Windows, so no
+-- resolution is needed — return argv unchanged. The darwin backend has to ask
+-- the login+interactive shell to find the program because GUI-launched apps
+-- there have a stripped PATH; that problem doesn't exist here.
+function M.resolve_argv(args)
+  return args
+end
+
 -- Apply OS-specific normalisation to a forward-slash-normalised path. Here we
 -- uppercase the drive letter so paths compare equal regardless of how the
 -- user typed it.
