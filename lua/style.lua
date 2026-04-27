@@ -51,6 +51,12 @@ local DEFAULTS = {
   -- since macOS users rarely right-click in a terminal.
   right_click_paste         = true,
 
+  -- Ctrl+Shift+Click on a selection: opens the selected text as a file in
+  -- editor_cmd. Same semantics as the keybind (path:line:col parsing,
+  -- relative-to-pane-cwd resolution), just on a mouse gesture so you can
+  -- highlight and click without leaving the mouse.
+  open_selection_on_click   = true,
+
   -- Format the tab title as " <idx> ▏ <claude-glyph?> <title> "; if any
   -- pane in the tab is a Claude session, that pane wins for both title and
   -- glyph regardless of focus. Strips Claude's own leading dingbat from
@@ -149,6 +155,18 @@ function M.apply(config, opts)
       event = { Down = { streak = 1, button = 'Right' } },
       mods  = 'NONE',
       action = wezterm.action.PasteFrom 'Clipboard',
+    })
+  end
+
+  if s.open_selection_on_click then
+    config.mouse_bindings = config.mouse_bindings or {}
+    -- Binding the Down event with the explicit CTRL|SHIFT mod combo means
+    -- the default "Down{Left} clears selection" path doesn't fire, so the
+    -- selection persists into our handler.
+    table.insert(config.mouse_bindings, {
+      event = { Down = { streak = 1, button = 'Left' } },
+      mods  = 'CTRL|SHIFT',
+      action = wezterm.action.EmitEvent 'termtools.open-selection',
     })
   end
 

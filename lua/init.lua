@@ -37,6 +37,10 @@ local DEFAULTS = {
   apply_style    = false, -- apply opinionated wezterm appearance/behaviour defaults
   style          = {},    -- per-key overrides; see lua/style.lua
   project_sort   = 'smart', -- 'smart' | 'alphabetical' | 'mru'; runtime cycle persists in wezterm.GLOBAL
+  -- Highlighted-path → editor. Default trigger is the Ctrl+Shift+Click mouse
+  -- binding from style.lua (`open_selection_on_click`). Set this to e.g.
+  -- `{ key = 'O', mods = 'CTRL|SHIFT' }` if you also want a hotkey.
+  open_selection_key = false,
 }
 
 local function default_shell()
@@ -221,6 +225,22 @@ function M.apply(config)
         action = o._claude.session_picker_action(),
       })
     end
+    if o.open_selection_key then
+      table.insert(config.keys, {
+        key = o.open_selection_key.key, mods = o.open_selection_key.mods,
+        action = pickers.open_selection_action(),
+      })
+      -- Same defensive lowercase twin as for action_key, since SHIFT-held
+      -- keypresses arrive as the uppercase letter.
+      if string.find(o.open_selection_key.mods or '', 'SHIFT')
+          and o.open_selection_key.key:match('^%u$') then
+        table.insert(config.keys, {
+          key = o.open_selection_key.key:lower(),
+          mods = o.open_selection_key.mods,
+          action = pickers.open_selection_action(),
+        })
+      end
+    end
   end
 
   if o._claude then o._claude.attach(config) end
@@ -240,6 +260,10 @@ function M.apply(config)
 
     wezterm.on('termtools.run-action', function(window, pane, root, label)
       pickers.run_action_by_label(window, pane, root, label, M.opts())
+    end)
+
+    wezterm.on('termtools.open-selection', function(window, pane)
+      pickers.run_open_selection(window, pane, M.opts())
     end)
 
     wezterm.on('augment-command-palette', function(window, pane)

@@ -2,7 +2,6 @@
 * Better project-level documentation of wezterm capabilities via LUA to plan future work
 * Easier workflow to create a new project
 * Can we make this project's configs editable via wezterm or is that a bad idea?
-* i know you can ctrl-click links but we can add a handler that will let me highlight a file path in console and open it in default editor?
 * Wire up `wezterm-mux-server` so panes survive a GUI restart. Run it as a daemon at login (Task Scheduler on Windows, launchd plist on macOS), expose a unix-domain mux in the wezterm config, and route new spawns through that domain. Lets us reload-vs-restart without losing long-running Claude sessions.
 * Termtools settings UI via JSON sidecar (the VS Code `settings.json` pattern adapted for WezTerm). Sketch:
   * Sidecar at `~/.config/termtools/settings.json` holding a flat map of opt overrides (`{"apply_style": true, "claude_indicators": true, "style": {"color_scheme": "Tokyo Night"}}`).

@@ -103,6 +103,7 @@ The palette entries are computed per palette-open, so they always reflect the ac
 | `default_keys`  | `false`                  | Auto-bind `project_key` / `action_key` to the pickers. |
 | `project_key`   | `{ key='p', mods='CTRL' }`       | Hotkey for the project picker (only used if `default_keys=true`). |
 | `action_key`    | `{ key='A', mods='CTRL\|SHIFT' }` | Hotkey for the action picker (only used if `default_keys=true`). When `SHIFT` is in `mods`, use the uppercase letter — shift-held keypresses are uppercase, lowercase won't match. |
+| `open_selection_key` | `false`                  | Optional hotkey for "open active pane's selection as a file in `editor_cmd`" (set to e.g. `{ key='O', mods='CTRL\|SHIFT' }` to bind one). The default trigger is the **`Ctrl+Shift+Click`** mouse gesture wired by `lua/style.lua` when `apply_style=true` — drag-select a path, then `Ctrl+Shift+Click` it to open. Parses `path:line:col` suffixes; resolves relative paths against the pane's CWD; for VS Code / Cursor `editor_cmd`, uses `--goto path:line:col` so the editor jumps to the right line. |
 
 Default project markers: `.git`, `.termtools.lua`, `package.json`, `pyproject.toml`, `Cargo.toml`.
 
