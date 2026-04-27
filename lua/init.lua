@@ -1,0 +1,243 @@
+-- termtools — context-sensitive hotkeys for terminal tabs.
+--
+-- Public API:
+--   termtools.setup(opts)         configure once, before .apply()
+--   termtools.apply(config)       returns the mutated wezterm config
+--   termtools.project_picker()    bind to a key yourself
+--   termtools.action_picker()     bind to a key yourself
+--   termtools.opts()              read back the merged opts (mainly for tests)
+--
+-- Typical use in ~/.wezterm.lua (see also examples/minimal.wezterm.lua,
+-- which uses include.lua to skip the package.path / require dance):
+--   local wezterm = require('wezterm')
+--   package.path = wezterm.home_dir .. '/projects/termtools/lua/?.lua;' .. package.path
+--   local termtools = require('init')
+--   termtools.setup({ scan_roots = { wezterm.home_dir .. '/projects' }, default_keys = true })
+--   return termtools.apply(wezterm.config_builder())
+
+local pickers = require('pickers')
+
+local M = {}
+
+local DEFAULTS = {
+  scan_roots    = {},
+  pinned        = {},
+  trusted_paths = {},
+  editor_cmd    = { 'code', '%s' },
+  default_cmd   = nil, -- resolved per-platform below
+  claude_cmd    = { 'claude' },
+  default_keys  = false,
+  project_key   = { key = 'p', mods = 'CTRL' },         -- CTRL|SHIFT P is wezterm's command palette
+  action_key    = { key = 'A', mods = 'CTRL|SHIFT' },   -- uppercase: SHIFT-held keypress is 'A', not 'a'
+  markers       = nil, -- nil = use projects.lua's defaults
+  wt_profiles   = false, -- read Windows Terminal settings.json for shells
+  claude_indicators = false, -- multi-session Claude awareness (tab glyphs + status bar + jump-to-waiting)
+  claude_next_key = { key = 'J', mods = 'CTRL|SHIFT' },
+  claude         = {},  -- forwarded to claude.setup()
+}
+
+local function default_shell()
+  local ok, wezterm = pcall(require, 'wezterm')
+  if ok and wezterm.target_triple and wezterm.target_triple:find('windows') then
+    -- powershell.exe (Windows PowerShell 5.1) ships with Windows; pwsh.exe
+    -- (PowerShell 7+) is opt-in. Default to the universal one.
+    return { 'powershell' }
+  end
+  return { os.getenv('SHELL') or '/bin/sh' }
+end
+
+local function shallow_merge(dst, src)
+  for k, v in pairs(src or {}) do dst[k] = v end
+  return dst
+end
+
+local CANDIDATE_PROJECT_DIRS = {
+  -- The common conventions across Windows / macOS / Linux. Listed in
+  -- approximate frequency-of-use; case variants (~/projects vs ~/Projects)
+  -- both probed because case-insensitive Windows/macOS will return one,
+  -- case-sensitive Linux will return whichever the user actually uses.
+  '~/projects', '~/Projects',
+  '~/code',     '~/Code',
+  '~/src',
+  '~/dev',
+  '~/repos',
+  '~/work',
+}
+
+-- Returns the subset of well-known project-parent directories that exist on
+-- this machine, normalised. Use as `scan_roots = termtools.default_scan_roots()`
+-- (optionally extended with your own paths) to get a sensible starting set
+-- without per-OS branching in your config.
+function M.default_scan_roots()
+  local util = require('util')
+  local home = os.getenv('USERPROFILE') or os.getenv('HOME')
+  if not home then return {} end
+
+  local result, seen = {}, {}
+  for _, candidate in ipairs(CANDIDATE_PROJECT_DIRS) do
+    local expanded = util.normalize((candidate:gsub('^~', home)))
+    local key = util.is_windows and expanded:lower() or expanded
+    if not seen[key] and util.dir_exists(expanded) then
+      seen[key] = true
+      result[#result + 1] = expanded
+    end
+  end
+  return result
+end
+
+local opts = nil
+
+function M.setup(user_opts)
+  user_opts = user_opts or {}
+  local merged = {}
+  shallow_merge(merged, DEFAULTS)
+  shallow_merge(merged, user_opts)
+  if merged.wt_profiles then
+    local ok, wt = pcall(require, 'wt')
+    if ok then
+      merged._wt = wt.read_profiles()
+      if merged._wt and merged._wt.default and not user_opts.default_cmd then
+        merged.default_cmd = merged._wt.default.args
+      end
+    end
+  end
+  if not merged.default_cmd then
+    merged.default_cmd = default_shell()
+  end
+  if merged.claude_indicators then
+    local ok, claude = pcall(require, 'claude')
+    if ok then
+      claude.setup(merged.claude or {})
+      merged._claude = claude
+    end
+  end
+  opts = merged
+  return M
+end
+
+function M.opts()
+  if not opts then M.setup({}) end
+  return opts
+end
+
+function M.project_picker()
+  return pickers.project_picker(M.opts())
+end
+
+function M.action_picker()
+  return pickers.action_picker(M.opts())
+end
+
+-- Look up the Claude state-glyph for a pane (working / waiting / stuck), or
+-- nil if the pane isn't a Claude session or claude_indicators is off.
+-- Designed to be called from a user-supplied format-tab-title handler.
+function M.claude_glyph_for_pane(pane_id)
+  local o = M.opts()
+  if o._claude then return o._claude.glyph_for_pane(pane_id) end
+  return nil
+end
+
+-- Build entries for wezterm's command palette. Called per palette open,
+-- so `pane` is always the currently active pane and we can resolve the
+-- caller's project root for the per-action entries.
+function M.palette_entries(_window, pane)
+  local wezterm = require('wezterm')
+  local projects = require('projects')
+  local o = M.opts()
+
+  local entries = {
+    {
+      brief = 'termtools: Project picker',
+      icon  = 'cod_folder_opened',
+      action = M.project_picker(),
+    },
+    {
+      brief = 'termtools: Action picker (current project)',
+      icon  = 'cod_play',
+      action = M.action_picker(),
+    },
+  }
+
+  local cwd = pickers.pane_cwd(pane)
+  local root = projects.find_root(cwd) or cwd
+  if not root then return entries end
+
+  local override = projects.load_overrides(root, o.trusted_paths)
+  local proj_name = (override and override.name) or require('util').basename(root)
+
+  for _, action in ipairs(pickers.list_actions(root, o)) do
+    entries[#entries + 1] = {
+      brief = string.format('termtools [%s]: %s', proj_name, action.label),
+      icon  = 'cod_terminal',
+      -- Indirect via wezterm event so the action runs after the palette
+      -- has fully closed. Direct action_callback dispatch from the palette
+      -- can race with the palette teardown and silently no-op.
+      action = wezterm.action.EmitEvent('termtools.run-action', root, action.label),
+    }
+  end
+
+  return entries
+end
+
+local handlers_registered = false
+
+function M.apply(config)
+  local o = M.opts()
+  if o.default_keys then
+    config.keys = config.keys or {}
+    table.insert(config.keys, {
+      key = o.project_key.key, mods = o.project_key.mods,
+      action = M.project_picker(),
+    })
+    table.insert(config.keys, {
+      key = o.action_key.key, mods = o.action_key.mods,
+      action = M.action_picker(),
+    })
+    -- Defensive twin: when SHIFT is in mods and key is uppercase, also
+    -- register the lowercase variant. WezTerm's key-matching has historically
+    -- accepted both; we don't gamble.
+    if string.find(o.action_key.mods or '', 'SHIFT')
+        and o.action_key.key:match('^%u$') then
+      table.insert(config.keys, {
+        key = o.action_key.key:lower(), mods = o.action_key.mods,
+        action = M.action_picker(),
+      })
+    end
+    if o._claude and o.claude_next_key then
+      table.insert(config.keys, {
+        key = o.claude_next_key.key, mods = o.claude_next_key.mods,
+        action = o._claude.next_waiting_action(),
+      })
+    end
+  end
+
+  if o._claude then o._claude.attach(config) end
+
+  -- Register wezterm event handlers once. The handlers re-read M.opts() at
+  -- dispatch time so opts can change between setup() calls without restart.
+  if not handlers_registered then
+    local wezterm = require('wezterm')
+
+    wezterm.on('termtools.project-picker', function(window, pane)
+      pickers.run_project_picker(window, pane, M.opts())
+    end)
+
+    wezterm.on('termtools.action-picker', function(window, pane)
+      pickers.run_action_picker(window, pane, M.opts())
+    end)
+
+    wezterm.on('termtools.run-action', function(window, pane, root, label)
+      pickers.run_action_by_label(window, pane, root, label, M.opts())
+    end)
+
+    wezterm.on('augment-command-palette', function(window, pane)
+      return M.palette_entries(window, pane)
+    end)
+
+    handlers_registered = true
+  end
+
+  return config
+end
+
+return M
