@@ -33,12 +33,20 @@ local config  = wezterm.config_builder()
 config.color_scheme = 'Tokyo Night'
 config.font         = wezterm.font('JetBrains Mono')
 
--- enable termtools (mutates config.keys):
-dofile(wezterm.home_dir .. '/projects/termtools/include.lua')(config, {
-  scan_roots    = { wezterm.home_dir .. '/projects' },
-  trusted_paths = { wezterm.home_dir .. '/projects' },
+-- TERMTOOLS = where you cloned this repo. It's NOT the same as where you
+-- keep your projects (those go in `scan_roots` below).
+--   On macOS / Linux: e.g. ~/src/termtools, ~/.local/share/termtools
+--   On Windows:       e.g. G:/claude/termtools, C:/Users/me/src/termtools
+local TERMTOOLS = wezterm.home_dir .. '/src/termtools'
+
+-- scan_roots = the parent directories of your actual projects. Whatever
+-- subdirs of these contain a project marker (.git/, package.json, etc.) will
+-- show up in the project picker.
+dofile(TERMTOOLS .. '/include.lua')(config, {
+  scan_roots    = { wezterm.home_dir .. '/code', wezterm.home_dir .. '/work' },
+  trusted_paths = { wezterm.home_dir .. '/code', wezterm.home_dir .. '/work' },
   default_keys  = true,
-})
+}, TERMTOOLS)
 
 -- include other things you maintain in separate files:
 -- dofile(wezterm.home_dir .. '/dotfiles/wezterm-keys.lua')(config)
@@ -49,9 +57,11 @@ config.window_decorations = 'RESIZE'
 return config
 ```
 
-If you prefer, the one-liner form `return dofile(...)(config, {...})` also works because the include returns the same `config` object.
+The one-liner form `return dofile(...)(config, {...}, TERMTOOLS)` also works because the include returns the same `config` object — the multi-line form above is just for when you want to thread other config in alongside.
 
-> `include.lua` self-locates at runtime, so the only path you need to spell out is the `dofile(...)` argument pointing at wherever you cloned the repo. `wezterm.home_dir` is the portable way to write "my home directory" in WezTerm config — `$HOME` on Unix, `%USERPROFILE%` on Windows. (WezTerm doesn't auto-expand `~` in path strings.) If your clone lives outside HOME — e.g. `G:\claude\termtools` on Windows or `/opt/termtools` on Linux — substitute that absolute path. Forward slashes work on every platform.
+> Why the 3rd argument? WezTerm runs user config under `mlua`'s sandbox, which strips the `debug` library — so `include.lua` can't introspect its own path via `debug.getinfo`. Passing the install path explicitly is the simplest way around that. Define it as a local once and the duplication stays in one place.
+>
+> `wezterm.home_dir` is the portable way to write "my home directory" — `$HOME` on Unix, `%USERPROFILE%` on Windows. (WezTerm doesn't auto-expand `~` in path strings.) If your clone lives outside HOME — e.g. `G:\claude\termtools` on Windows or `/opt/termtools` on Linux — set `TERMTOOLS` to that absolute path. Forward slashes work on every platform.
 
 ### B. Start fresh from a minimal config
 
@@ -168,10 +178,10 @@ The reader probes the three known WT settings paths in order (Store, Preview, un
 Designed for workflows where you keep many Claude Code sessions open at once. Set `claude_indicators = true`:
 
 ```lua
-dofile(wezterm.home_dir .. '/projects/termtools/include.lua')(config, {
+dofile(TERMTOOLS .. '/include.lua')(config, {
   -- … your other opts …
   claude_indicators = true,
-})
+}, TERMTOOLS)
 ```
 
 What you get:
