@@ -211,10 +211,14 @@ function M.run_action_picker(window, pane, opts)
 
     local display
     if dimmed[label] or disabled[label] then
+      -- Italic + an explicit hex grey so the row stays legible on dark
+      -- schemes. Half-intensity stacked on Solarized's Grey (~#586e75) drops
+      -- it to ~#2c3a3e, which is invisible against base03 (#002b36).
       display = wezterm.format {
-        { Attribute = { Intensity = 'Half' } },
-        { Foreground = { AnsiColor = 'Grey' } },
+        { Attribute = { Italic = true } },
+        { Foreground = { Color = '#93a1a1' } },
         { Text = plain },
+        'ResetAttributes',
       }
     else
       display = plain
