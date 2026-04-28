@@ -261,6 +261,7 @@ lua/
     project.lua  project picker, sort modes, MRU, tab-counting
     action.lua   action picker, list_actions, run-by-label
   open_selection.lua  Ctrl+Shift+Click / hotkey "open path in editor"
+  palette.lua    entries that augment WezTerm's command palette
   util.lua       generic path/fs helpers (delegates platform specifics);
                  hosts util.foreach_pane and util.pane_cwd
   claude.lua     multi-session Claude awareness (opt-in via claude_indicators)

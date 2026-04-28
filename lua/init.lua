@@ -183,48 +183,6 @@ function M.claude_glyph_for_pane(pane_id)
   return nil
 end
 
--- Build entries for wezterm's command palette. Called per palette open,
--- so `pane` is always the currently active pane and we can resolve the
--- caller's project root for the per-action entries.
-function M.palette_entries(_window, pane)
-  local wezterm = require('wezterm')
-  local projects = require('projects')
-  local o = M.opts()
-
-  local entries = {
-    {
-      brief = 'termtools: Project picker',
-      icon  = 'cod_folder_opened',
-      action = M.project_picker(),
-    },
-    {
-      brief = 'termtools: Action picker (current project)',
-      icon  = 'cod_play',
-      action = M.action_picker(),
-    },
-  }
-
-  local cwd = require('util').pane_cwd(pane)
-  local root = projects.find_root(cwd) or cwd
-  if not root then return entries end
-
-  local override = projects.load_overrides(root, o.trusted_paths)
-  local proj_name = (override and override.name) or require('util').basename(root)
-
-  for _, action in ipairs(pickers.list_actions(root, o)) do
-    entries[#entries + 1] = {
-      brief = string.format('termtools [%s]: %s', proj_name, action.label),
-      icon  = 'cod_terminal',
-      -- Indirect via wezterm event so the action runs after the palette
-      -- has fully closed. Direct action_callback dispatch from the palette
-      -- can race with the palette teardown and silently no-op.
-      action = wezterm.action.EmitEvent('termtools.run-action', root, action.label),
-    }
-  end
-
-  return entries
-end
-
 local handlers_registered = false
 
 function M.apply(config)
@@ -307,7 +265,7 @@ function M.apply(config)
     end)
 
     wezterm.on('augment-command-palette', function(window, pane)
-      return M.palette_entries(window, pane)
+      return require('palette').entries(window, pane, M.opts())
     end)
 
     handlers_registered = true

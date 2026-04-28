@@ -39,7 +39,7 @@ return function(config, opts, install_dir)
   -- Lua interned at first load and edits silently no-op.
   for _, name in ipairs({
     'init', 'pickers', 'projects', 'actions', 'util', 'wt', 'claude', 'style',
-    'open_selection',
+    'open_selection', 'palette',
     'pickers.project', 'pickers.action',
     'platform', 'platform.windows', 'platform.darwin',
   }) do
