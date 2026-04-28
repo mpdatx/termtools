@@ -9,8 +9,12 @@ return {
   name = 'termtools',
 
   actions = {
-    -- open_file picks up editor_cmd from setup, dims when the file doesn't
-    -- exist, and switches the description to "create <path>" in that case.
-    actions.open_file('docs/plan.md'),
+    -- open_file resolves the default editor through util.editor_spec at
+    -- fire time, dims when the file doesn't exist, and switches the
+    -- description to "create <path>" in that case. Pass 'inline' as the
+    -- second arg for a sibling entry that opens the file in a wezterm
+    -- pane via the inline editor.
+    actions.open_file('docs/plan.md', 'default'),
+    actions.open_file('docs/plan.md', 'inline'),
   },
 }

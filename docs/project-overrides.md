@@ -74,19 +74,25 @@ Three states result:
 
 The wezterm command palette only surfaces enabled and dimmed entries — it has no idiomatic way to render an inert row, so disabled ones are hidden there.
 
-### Helper: `actions.open_file(filename)`
+### Helper: `actions.open_file(filename, role)`
 
-The built-in `Open TODO.md` / `Open README.md` entries are produced by this factory. It auto-uses your configured `editor_cmd`, dims when the file doesn't exist, and updates its description to indicate creation. Reuse it from your override file:
+The built-in `Open TODO.md` / `Open README.md` entries are produced by this factory. `role` is `'default'` (an external editor — VS Code etc.) or `'inline'` (a terminal editor in a wezterm pane — nvim etc.) and resolves through the `editors` opt at fire time, picking up runtime `Switch X editor` overrides. The factory dims when the file doesn't exist and updates its description to indicate creation. Reuse it from your override file:
 
 ```lua
 local actions = require('actions')
 return {
   actions = {
-    actions.open_file('CHANGELOG.md'),
-    actions.open_file('docs/architecture.md'),
+    -- Two action picker rows for the same file: the default external
+    -- editor and the inline pane editor.
+    actions.open_file('CHANGELOG.md', 'default'),
+    actions.open_file('CHANGELOG.md', 'inline'),
+    actions.open_file('docs/architecture.md', 'default'),
+    actions.open_file('docs/architecture.md', 'inline'),
   },
 }
 ```
+
+`role` defaults to `'default'` if omitted, so legacy single-argument calls (`actions.open_file('CHANGELOG.md')`) still work.
 
 ## Common patterns
 
