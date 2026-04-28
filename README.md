@@ -87,6 +87,25 @@ The palette entries are computed per palette-open, so they always reflect the ac
 
 ## `setup({})` options
 
+Options can be passed in either form — the table below uses flat keys for compactness, but you can also group them by section to mirror the source structure (`paths`, `hotkeys`, `editors`, `features`, `project_picker`):
+
+```lua
+-- flat (legacy form, fully supported):
+termtools.setup({
+  scan_roots = { … }, default_keys = true, project_key = { … },
+})
+
+-- nested (mirrors lua/init.lua's DEFAULTS_NESTED):
+termtools.setup({
+  paths   = { scan_roots = { … } },
+  hotkeys = { default_keys = true, project_key = { … } },
+})
+
+-- mixed forms also work — flatten() walks one level.
+```
+
+The `style` and `claude` keys are always at the top level (passed straight through to the relevant module's setup).
+
 | Option          | Default                  | Description |
 | --------------- | ------------------------ | ----------- |
 | `scan_roots`    | `{}`                     | Dirs whose immediate subdirs are auto-discovered as projects. |

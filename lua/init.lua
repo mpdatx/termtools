@@ -19,29 +19,72 @@ local pickers = require('pickers')
 
 local M = {}
 
-local DEFAULTS = {
-  scan_roots    = {},
-  pinned        = {},
-  trusted_paths = {},
-  editor_cmd    = { 'code', '%s' },
-  default_cmd   = nil, -- resolved per-platform below
-  claude_cmd    = { 'claude' },
-  default_keys  = false,
-  project_key   = { key = 'p', mods = 'CTRL' },         -- CTRL|SHIFT P is wezterm's command palette
-  action_key    = { key = 'A', mods = 'CTRL|SHIFT' },   -- uppercase: SHIFT-held keypress is 'A', not 'a'
-  markers       = nil, -- nil = use projects.lua's defaults
-  wt_profiles   = false, -- read Windows Terminal settings.json for shells
-  claude_indicators = false, -- multi-session Claude awareness (tab glyphs + status bar + jump-to-waiting)
-  claude_next_key = { key = 'J', mods = 'CTRL|SHIFT' },
-  claude         = {},  -- forwarded to claude.setup()
-  apply_style    = false, -- apply opinionated wezterm appearance/behaviour defaults
-  style          = {},    -- per-key overrides; see lua/style.lua
-  project_sort   = 'smart', -- 'smart' | 'alphabetical' | 'mru'; runtime cycle persists in wezterm.GLOBAL
-  -- Highlighted-path → editor. Default trigger is the Ctrl+Shift+Click mouse
-  -- binding from style.lua (`open_selection_on_click`). Set this to e.g.
-  -- `{ key = 'O', mods = 'CTRL|SHIFT' }` if you also want a hotkey.
-  open_selection_key = false,
+-- DEFAULTS — grouped by concern for readability. Internal code keeps
+-- reading flat keys (opts.scan_roots, opts.project_key, ...); we flatten
+-- once at module load. user_opts passed to setup() may be either flat
+-- (legacy form, still supported) or nested (matching the structure
+-- below). The flatten() helper accepts both.
+local DEFAULTS_NESTED = {
+  paths = {
+    scan_roots    = {},
+    pinned        = {},
+    trusted_paths = {},
+    markers       = nil, -- nil = use projects.lua's defaults
+  },
+  hotkeys = {
+    default_keys       = false,
+    project_key        = { key = 'p', mods = 'CTRL' },        -- CTRL|SHIFT P is wezterm's command palette
+    action_key         = { key = 'A', mods = 'CTRL|SHIFT' },  -- uppercase: SHIFT-held keypress is 'A', not 'a'
+    claude_next_key    = { key = 'J', mods = 'CTRL|SHIFT' },  -- only used when claude_indicators = true
+    -- Highlighted-path → editor. Default trigger is the Ctrl+Shift+Click
+    -- mouse binding from style.lua (`open_selection_on_click`). Set to
+    -- e.g. `{ key = 'O', mods = 'CTRL|SHIFT' }` if you also want a hotkey.
+    open_selection_key = false,
+  },
+  editors = {
+    editor_cmd  = { 'code', '%s' },
+    default_cmd = nil, -- resolved per-platform at setup time
+    claude_cmd  = { 'claude' },
+  },
+  features = {
+    wt_profiles       = false, -- read Windows Terminal settings.json for shells
+    apply_style       = false, -- apply opinionated wezterm appearance/behaviour defaults
+    claude_indicators = false, -- multi-session Claude awareness
+  },
+  project_picker = {
+    project_sort = 'smart', -- 'smart' | 'alphabetical' | 'mru'; runtime cycle persists in wezterm.GLOBAL
+  },
+  -- Pass-through tables forwarded to module setup()s. Kept at the top
+  -- level (not flattened) so the inner key set is owned by the module.
+  style  = {},  -- per-key overrides; see lua/style.lua
+  claude = {},  -- forwarded to claude.setup()
 }
+
+-- Names of the grouping sections. Used by flatten() to spread group
+-- contents into the top level. Anything not in this set stays as-is —
+-- including the pass-through tables (style, claude) and any flat-form
+-- keys a user passes for backward compat.
+local DEFAULT_SECTIONS = {
+  paths = true, hotkeys = true, editors = true,
+  features = true, project_picker = true,
+}
+
+-- Spread one level of named sections into a flat table. Tolerates either
+-- form — flat user_opts keys pass through untouched, nested ones get
+-- flattened. Pass-through tables (style, claude) stay at the top level.
+local function flatten(t)
+  local flat = {}
+  for k, v in pairs(t or {}) do
+    if DEFAULT_SECTIONS[k] and type(v) == 'table' then
+      for sub_k, sub_v in pairs(v) do flat[sub_k] = sub_v end
+    else
+      flat[k] = v
+    end
+  end
+  return flat
+end
+
+local DEFAULTS = flatten(DEFAULTS_NESTED)
 
 local function default_shell()
   return require('platform').default_shell()
@@ -86,12 +129,16 @@ local opts = nil
 
 function M.setup(user_opts)
   user_opts = user_opts or {}
-  local merged = require('util').merge_defaults(DEFAULTS, user_opts)
+  -- Flatten first so callers can pass either flat keys (legacy form) or
+  -- nested sections matching DEFAULTS_NESTED — both end up flat for the
+  -- internal merge.
+  local flat_user = flatten(user_opts)
+  local merged = require('util').merge_defaults(DEFAULTS, flat_user)
   if merged.wt_profiles then
     local ok, wt = pcall(require, 'wt')
     if ok then
       merged._wt = wt.read_profiles()
-      if merged._wt and merged._wt.default and not user_opts.default_cmd then
+      if merged._wt and merged._wt.default and not flat_user.default_cmd then
         merged.default_cmd = merged._wt.default.args
       end
     end
