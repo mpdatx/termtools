@@ -19,6 +19,22 @@ function M.default_shell()
   return { os.getenv('SHELL') or '/bin/zsh' }
 end
 
+-- Per-platform editor defaults consumed by the file-open / inline-view
+-- actions. `registry` keys are user-facing names; `cmd` is an argv template
+-- where '%s' is replaced with the target file. `kind = 'external'` means
+-- launch via background_child_process (GUI editor); `kind = 'pane'` means
+-- spawn into a wezterm pane split in the given `direction`.
+function M.default_editors()
+  return {
+    registry = {
+      code = { cmd = { 'code', '%s' }, kind = 'external' },
+      vim  = { cmd = { 'vim',  '%s' }, kind = 'pane', direction = 'Right' },
+    },
+    default = 'code',
+    inline  = 'vim',
+  }
+end
+
 -- macOS spawns work directly: no PATHEXT trap, no .cmd shims, the program
 -- name in `args[1]` is found by execvp searching $PATH. No wrapping needed.
 function M.editor_launch_args(args)
