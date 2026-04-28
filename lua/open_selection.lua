@@ -6,8 +6,8 @@
 -- `open_selection_key`) or the Ctrl+Shift+Click mouse binding wired by
 -- lua/style.lua.
 
-local wezterm = require('wezterm')
 local util    = require('util')
+local actions = require('actions')
 
 local M = {}
 
@@ -18,12 +18,6 @@ end
 
 local function is_absolute(path)
   return path:sub(1, 1) == '/' or path:match('^%a:[/\\]') ~= nil
-end
-
-local function looks_like_vscode(editor_cmd)
-  if type(editor_cmd) ~= 'table' or not editor_cmd[1] then return false end
-  local prog = editor_cmd[1]:lower():gsub('%.exe$', ''):gsub('%.cmd$', '')
-  return prog:match('code$') ~= nil or prog:match('cursor$') ~= nil
 end
 
 function M.run(window, pane, opts)
@@ -56,23 +50,12 @@ function M.run(window, pane, opts)
     return
   end
 
+  -- Single editor-launch path lives in actions.open_in_editor; we just hand
+  -- it the resolved path plus the optional line/col so it can pick the
+  -- --goto form when the editor supports it.
   local editor_cmd = opts.editor_cmd or { 'code', '%s' }
-  local args
-  if line and looks_like_vscode(editor_cmd) then
-    -- VS Code / Cursor accept --goto path:line[:col] for jump-to-line.
-    local target = path
-    if col then target = path .. ':' .. line .. ':' .. col
-    else        target = path .. ':' .. line end
-    args = { editor_cmd[1], '--goto', target }
-  else
-    args = util.format_cmd(editor_cmd, path)
-  end
-
-  args = require('platform').editor_launch_args(args)
-  local ok, err = pcall(wezterm.background_child_process, args)
-  if not ok then
-    wezterm.log_error('termtools: open_selection launch failed: ' .. tostring(err))
-  end
+  actions.open_in_editor(path, editor_cmd,
+    line and { line = tonumber(line), col = tonumber(col) } or nil)
 end
 
 return M

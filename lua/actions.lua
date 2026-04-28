@@ -18,14 +18,31 @@ local platform = require('platform')
 
 local M = {}
 
-local function open_in_editor(target, editor_cmd)
+-- Spawn the configured editor on `target` (a file path or directory).
+-- `position` is optional `{ line = N, col = N }` — when supplied AND the
+-- editor command looks like VS Code / Cursor, the launch uses `--goto
+-- path:line:col` so the editor jumps directly to the right position.
+-- Other editors get a bare path; line/col are silently ignored.
+function M.open_in_editor(target, editor_cmd, position)
   local template = editor_cmd or { 'code', '%s' }
-  local args = platform.editor_launch_args(util.format_cmd(template, target))
+  local args
+  if position and position.line and util.looks_like_vscode_editor(template) then
+    local goto_target = position.col
+      and (target .. ':' .. position.line .. ':' .. position.col)
+      or  (target .. ':' .. position.line)
+    args = { template[1], '--goto', goto_target }
+  else
+    args = util.format_cmd(template, target)
+  end
+  args = platform.editor_launch_args(args)
   local ok, err = pcall(wezterm.background_child_process, args)
   if not ok then
     wezterm.log_error('termtools: editor launch failed: ' .. tostring(err))
   end
 end
+
+-- Local alias for the in-file callers below.
+local open_in_editor = M.open_in_editor
 
 local function cmd_to_string(template, value)
   local parts = {}

@@ -119,6 +119,16 @@ function M.resolve_editor_cmd(override, opts)
   return { 'code', '%s' }
 end
 
+-- Heuristic: does this editor command look like VS Code or Cursor (which
+-- accept `--goto path:line:col` for jump-to-position)? Strips a trailing
+-- `.exe` / `.cmd` from the program name before matching so the Windows
+-- shim names work too.
+function M.looks_like_vscode_editor(editor_cmd)
+  if type(editor_cmd) ~= 'table' or not editor_cmd[1] then return false end
+  local prog = editor_cmd[1]:lower():gsub('%.exe$', ''):gsub('%.cmd$', '')
+  return prog:match('code$') ~= nil or prog:match('cursor$') ~= nil
+end
+
 -- ── WezTerm-pane helpers ──────────────────────────────────────────────────
 -- These wrap two recurring patterns:
 --   pane_cwd      — resolve a pane's working directory through OSC 7/9;9
