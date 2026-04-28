@@ -51,10 +51,15 @@ function M.run(window, pane, opts)
   end
 
   -- Single editor-launch path lives in actions.open_in_editor; we just hand
-  -- it the resolved path plus the optional line/col so it can pick the
+  -- it the resolved spec plus the optional line/col so it can pick the
   -- --goto form when the editor supports it.
-  local editor_cmd = opts.editor_cmd or { 'code', '%s' }
-  actions.open_in_editor(path, editor_cmd,
+  local spec = util.editor_spec('default', opts)
+  if not spec then
+    window:toast_notification('termtools',
+      'no default editor configured.', nil, 1500)
+    return
+  end
+  actions.open_in_editor(window, pane, path, spec,
     line and { line = tonumber(line), col = tonumber(col) } or nil)
 end
 

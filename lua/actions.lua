@@ -14,34 +14,50 @@
 local wezterm  = require('wezterm')
 local act      = wezterm.action
 local util     = require('util')
-local platform = require('platform')
 
 local M = {}
 
 -- Spawn the configured editor on `target` (a file path or directory).
--- `position` is optional `{ line = N, col = N }` — when supplied AND the
--- editor command looks like VS Code / Cursor, the launch uses `--goto
--- path:line:col` so the editor jumps directly to the right position.
--- Other editors get a bare path; line/col are silently ignored.
-function M.open_in_editor(target, editor_cmd, position)
-  local template = editor_cmd or { 'code', '%s' }
+-- editor_spec is `{ cmd = {...}, kind = 'external' | 'pane', direction? }`.
+-- For backward compat with internal call sites that haven't migrated, a
+-- bare argv table is also accepted and treated as an external spec.
+-- position is optional `{ line = N, col = N }` — only honoured for
+-- VS Code / Cursor external editors (--goto path:line:col).
+function M.open_in_editor(window, pane, target, editor_spec, position)
+  if not editor_spec then return end
+  -- Tolerate a bare argv table for backward compat.
+  if editor_spec[1] then
+    editor_spec = { cmd = editor_spec, kind = 'external' }
+  end
+  if not editor_spec.cmd then return end
+
   local args
-  if position and position.line and util.looks_like_vscode_editor(template) then
+  if editor_spec.kind == 'external' and position and position.line
+      and util.looks_like_vscode_editor(editor_spec.cmd) then
     local goto_target = position.col
       and (target .. ':' .. position.line .. ':' .. position.col)
       or  (target .. ':' .. position.line)
-    args = { template[1], '--goto', goto_target }
+    args = { editor_spec.cmd[1], '--goto', goto_target }
   else
-    args = util.format_cmd(template, target)
+    args = util.format_cmd(editor_spec.cmd, target)
   end
-  args = platform.editor_launch_args(args)
-  local ok, err = pcall(wezterm.background_child_process, args)
-  if not ok then
-    wezterm.log_error('termtools: editor launch failed: ' .. tostring(err))
+
+  if editor_spec.kind == 'pane' then
+    if not window or not pane then return end
+    window:perform_action(wezterm.action.SplitPane {
+      direction = editor_spec.direction or 'Right',
+      command   = { args = args },
+    }, pane)
+  else
+    args = require('platform').editor_launch_args(args)
+    local ok, err = pcall(wezterm.background_child_process, args)
+    if not ok then
+      wezterm.log_error('termtools: editor launch failed: ' .. tostring(err))
+    end
   end
 end
 
--- Local alias for the in-file callers below.
+-- Local alias for in-file callers below.
 local open_in_editor = M.open_in_editor
 
 local function cmd_to_string(template, value)
@@ -52,48 +68,47 @@ local function cmd_to_string(template, value)
   return table.concat(parts, ' ')
 end
 
--- Used by the open_file factory at action-fire time. The factory is
--- often invoked from per-project `.termtools.lua` files that don't have
--- access to the live opts table — in that case we lazy-fetch via init.
--- Built-in catalogue entries pass `override` directly (already set up at
--- catalogue() build time) so the lazy require there is a no-op fast path.
--- The actual selection logic lives in util.resolve_editor_cmd; this
--- wrapper just sources the current opts.
-local function resolve_editor_cmd(override)
-  if override then return override end
-  local ok, init = pcall(require, 'init')
-  local opts = (ok and init.opts) and init.opts() or nil
-  return util.resolve_editor_cmd(nil, opts)
-end
-
 -- Public factory for "open <root>/<filename> in the configured editor".
--- Reused for the built-in TODO.md / README.md entries and exposed so that
--- per-project `.termtools.lua` files can do `actions.open_file('CHANGELOG.md')`
--- without re-deriving the editor command.
-function M.open_file(filename, editor_cmd_override)
+-- `role` is 'default' (an external editor — VS Code etc.) or 'inline'
+-- (a terminal editor in a wezterm pane — nvim etc.). Returns one action;
+-- callers wanting both variants call open_file twice.
+function M.open_file(filename, role)
+  role = role or 'default'
+  local label_suffix = role == 'inline' and ' inline' or ''
   return {
-    label = 'Open ' .. filename,
+    label = 'Open ' .. filename .. label_suffix,
     description = function(root)
-      local ec = resolve_editor_cmd(editor_cmd_override)
+      local opts = require('init').opts()
+      local spec = util.editor_spec(role, opts)
       local file_path = util.path_join(root, filename)
+      if not spec then
+        return role == 'inline' and 'no inline editor configured' or '?'
+      end
       if util.file_exists(file_path) then
-        return cmd_to_string(ec, file_path)
+        return cmd_to_string(spec.cmd, file_path)
       end
       return 'create ' .. file_path .. ' (file does not exist)'
     end,
     dimmed_when = function(root)
       return not util.file_exists(util.path_join(root, filename))
     end,
-    run = function(_window, _pane, root)
-      local ec = resolve_editor_cmd(editor_cmd_override)
-      open_in_editor(util.path_join(root, filename), ec)
+    run = function(window, pane, root)
+      local opts = require('init').opts()
+      local spec = util.editor_spec(role, opts)
+      if not spec then
+        if role == 'inline' and window then
+          window:toast_notification('termtools',
+            'inline editor not configured.', nil, 1500)
+        end
+        return
+      end
+      open_in_editor(window, pane, util.path_join(root, filename), spec)
     end,
   }
 end
 
 function M.catalogue(opts)
   opts = opts or {}
-  local editor_cmd  = opts.editor_cmd or { 'code', '%s' }
   -- opts.default_cmd is always populated by init.setup() (it falls through
   -- to a per-OS default), so no fallback is needed here.
   local default_cmd = opts.default_cmd
@@ -105,13 +120,21 @@ function M.catalogue(opts)
   local list = {
     {
       label = 'Open project in editor',
-      description = function(root) return cmd_to_string(editor_cmd, root) end,
-      run = function(_window, _pane, root)
-        open_in_editor(root, editor_cmd)
+      description = function(root)
+        local spec = util.editor_spec('default', opts)
+        if not spec then return '?' end
+        return cmd_to_string(spec.cmd, root)
+      end,
+      run = function(window, pane, root)
+        local spec = util.editor_spec('default', opts)
+        if not spec then return end
+        open_in_editor(window, pane, root, spec)
       end,
     },
-    M.open_file('TODO.md', editor_cmd),
-    M.open_file('README.md', editor_cmd),
+    M.open_file('TODO.md', 'default'),
+    M.open_file('TODO.md', 'inline'),
+    M.open_file('README.md', 'default'),
+    M.open_file('README.md', 'inline'),
     {
       label = 'New Claude pane',
       description = 'split right; ' .. claude_cmd_str .. ' at project root',
