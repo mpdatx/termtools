@@ -87,7 +87,7 @@ The palette entries are computed per palette-open, so they always reflect the ac
 
 ## `setup({})` options
 
-Options can be passed in either form — the table below uses flat keys for compactness, but you can also group them by section to mirror the source structure (`paths`, `hotkeys`, `editors`, `features`, `project_picker`):
+Options can be passed in either form — the table below uses flat keys for compactness, but you can also group them by section to mirror the source structure (`paths`, `hotkeys`, `commands`, `features`, `project_picker`):
 
 ```lua
 -- flat (legacy form, fully supported):
@@ -111,7 +111,8 @@ The `style` and `claude` keys are always at the top level (passed straight throu
 | `scan_roots`    | `{}`                     | Dirs whose immediate subdirs are auto-discovered as projects. |
 | `pinned`        | `{}`                     | Explicit project paths to add to the picker. |
 | `trusted_paths` | `{}`                     | Roots under which `.termtools.lua` override files may be loaded. |
-| `editor_cmd`    | `{ 'code', '%s' }`       | Editor launched by Open-TODO/README. `%s` is the file path. |
+| `editors`       | platform default         | Named editor registry plus role assignments — `{ registry = { name = { cmd, kind, direction? }, … }, default = name, inline = name \| nil }`. The platform default supplies `code` (external) plus `nvim` on Windows / `vim` on macOS as the inline editor. User opts shallow-merge on top, with per-name merging inside `registry`. |
+| `editor_cmd`    | (legacy)                 | Pre-multi-editor single-template form — still accepted. If set without `editors`, gets synthesized into a registry entry that becomes the `default` role. New configs should use `editors` instead. |
 | `default_cmd`   | `{ 'powershell' }` on Windows | Shell used when the picker spawns a fresh tab. Set to `{ 'pwsh' }` if you have PowerShell 7+. |
 | `claude_cmd`    | `{ 'claude' }`           | Command for "New Claude pane". |
 | `markers`       | see below                | Override the project-marker list. |
@@ -122,7 +123,7 @@ The `style` and `claude` keys are always at the top level (passed straight throu
 | `default_keys`  | `false`                  | Auto-bind `project_key` / `action_key` to the pickers. |
 | `project_key`   | `{ key='p', mods='CTRL' }`       | Hotkey for the project picker (only used if `default_keys=true`). |
 | `action_key`    | `{ key='A', mods='CTRL\|SHIFT' }` | Hotkey for the action picker (only used if `default_keys=true`). When `SHIFT` is in `mods`, use the uppercase letter — shift-held keypresses are uppercase, lowercase won't match. |
-| `open_selection_key` | `false`                  | Optional hotkey for "open active pane's selection as a file in `editor_cmd`" (set to e.g. `{ key='O', mods='CTRL\|SHIFT' }` to bind one). The default trigger is the **`Ctrl+Shift+Click`** mouse gesture wired by `lua/style.lua` when `apply_style=true` — drag-select a path, then `Ctrl+Shift+Click` it to open. Parses `path:line:col` suffixes; resolves relative paths against the pane's CWD; for VS Code / Cursor `editor_cmd`, uses `--goto path:line:col` so the editor jumps to the right line. |
+| `open_selection_key` | `false`                  | Optional hotkey for "open active pane's selection as a file in the default editor" (set to e.g. `{ key='O', mods='CTRL\|SHIFT' }` to bind one). The default trigger is the **`Ctrl+Shift+Click`** mouse gesture wired by `lua/style.lua` when `apply_style=true` — drag-select a path, then `Ctrl+Shift+Click` it to open. Parses `path:line:col` suffixes; resolves relative paths against the pane's CWD; for VS Code / Cursor as the default editor, uses `--goto path:line:col` so the editor jumps to the right line. |
 
 Default project markers: `.git`, `.termtools.lua`, `package.json`, `pyproject.toml`, `Cargo.toml`.
 
@@ -132,12 +133,14 @@ If you want to bind the hotkeys yourself (e.g. behind a leader key), set `defaul
 
 | Label                        | What it does |
 | ---------------------------- | ------------ |
-| `Open project in editor`     | Launches `editor_cmd` on `<root>` (opens the whole project folder). |
-| `Open TODO.md`               | Launches `editor_cmd` on `<root>/TODO.md`. When the file doesn't exist, the entry is dimmed and the description switches to "create &lt;path&gt; (file does not exist)" — selecting it still runs and the editor creates the file on first save. |
-| `Open README.md`             | Same, for `README.md`. |
+| `Open project in editor`     | Launches the default editor (`editors.default`) on `<root>` (opens the whole project folder). |
+| `Open TODO.md`               | Launches `editors.default` on `<root>/TODO.md`. The companion `Open TODO.md inline` row spawns `editors.inline` in a wezterm pane next to the active one. Both rows dim when the file doesn't exist; selecting still runs and the editor creates the file on first save. |
+| `Open README.md`             | Same, for `README.md`. Inline sibling: `Open README.md inline`. |
 | `New Claude pane`            | Splits active pane right; runs `claude_cmd` with cwd at root. |
 | `New shell pane`             | Splits active pane down; runs `default_cmd` with cwd at root. |
 | `New tab at project root`    | Spawns a new tab at root running `default_cmd`. |
+| `Switch default editor`      | Open a picker listing every external-kind editor in `editors.registry`. Selection sets `wezterm.GLOBAL.termtools_editor_default`; persists across config reloads, resets on full WezTerm restart. |
+| `Switch inline editor`       | Same shape for pane-kind editors. Includes a `(disable)` row that turns the inline variant off until you set it again. |
 | `Refresh projects`           | Invalidates the discovery cache. |
 | `Cycle project sort`         | Cycle the project picker's sort mode (smart → alphabetical → mru → smart). Toasts the new mode; persists in `wezterm.GLOBAL`. |
 | `New tab: <profile>` (×N)    | One per Windows Terminal profile when `wt_profiles = true`. Currently commented out in `lua/actions.lua`; uncomment the block at the bottom to re-enable. |

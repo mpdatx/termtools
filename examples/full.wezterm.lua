@@ -32,9 +32,26 @@ termtools.setup({
     wezterm.home_dir .. '/projects',
   },
 
-  -- Editor command for "Open TODO.md" / "Open README.md". `%s` is the file
-  -- path; the command is launched as a detached background process.
-  editor_cmd = { 'code', '%s' },
+  -- Multi-editor registry. Each entry has cmd (argv template, %s = path),
+  -- kind ('external' for detached GUI processes, 'pane' for terminal
+  -- editors that open in a wezterm pane), and an optional direction for
+  -- the pane kind. Roles below pick one entry name from this registry.
+  -- The platform default supplies code+nvim on Windows / code+vim on
+  -- macOS — anything you set here merges on top.
+  editors = {
+    registry = {
+      code   = { cmd = { 'code',   '%s' }, kind = 'external' },
+      cursor = { cmd = { 'cursor', '%s' }, kind = 'external' },
+      nvim   = { cmd = { 'nvim',   '%s' }, kind = 'pane', direction = 'Right' },
+      less   = { cmd = { 'less',   '%s' }, kind = 'pane', direction = 'Down'  },
+    },
+    default = 'code',   -- "Open TODO.md" uses this
+    inline  = 'nvim',   -- "Open TODO.md inline" uses this
+  },
+
+  -- Legacy single-editor form. If you set `editors` above, this is
+  -- ignored. Kept here as a hint for users not yet using the registry.
+  -- editor_cmd = { 'code', '%s' },
 
   -- Shell used when the project picker spawns a fresh tab (and by the
   -- "New shell pane" / "New tab at project root" actions). Can be overridden

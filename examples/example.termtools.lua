@@ -59,7 +59,11 @@ return {
 
     -- Reuse the built-in factory to add more "Open <file>" entries with the
     -- same dim-when-missing behaviour as the built-in TODO/README actions.
-    actions.open_file('CHANGELOG.md'),
-    actions.open_file('docs/architecture.md'),
+    -- Two action picker rows for the same file: the default external
+    -- editor (VS Code etc.) and the inline pane editor (nvim etc.).
+    actions.open_file('CHANGELOG.md', 'default'),
+    actions.open_file('CHANGELOG.md', 'inline'),
+    actions.open_file('docs/architecture.md', 'default'),
+    actions.open_file('docs/architecture.md', 'inline'),
   },
 }
