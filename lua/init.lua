@@ -42,7 +42,10 @@ local DEFAULTS_NESTED = {
     open_selection_key = false,
   },
   editors = {
-    editor_cmd  = { 'code', '%s' },
+    -- editor_cmd is no longer a top-level default — it lives inside the
+    -- `editors` table below (resolved per-platform in setup()). Kept as an
+    -- opt name for backward compat: setup() detects it and synthesizes a
+    -- registry entry.
     default_cmd = nil, -- resolved per-platform at setup time
     claude_cmd  = { 'claude' },
   },
@@ -150,6 +153,49 @@ function M.setup(user_opts)
   -- `claude` won't resolve via execvp. Ask the login+interactive shell where
   -- it lives once and cache the absolute path. No-op on Windows.
   merged.claude_cmd = require('platform').resolve_argv(merged.claude_cmd)
+
+  -- Resolve `editors` opt:
+  --   1. start with platform.default_editors() as baseline
+  --   2. shallow-merge user_opts.editors on top (per-name inside registry)
+  --   3. if user only set legacy editor_cmd (no editors), synthesize a
+  --      single-entry registry from it and use that as the default role
+  do
+    local platform = require('platform')
+    local base = platform.default_editors and platform.default_editors() or
+      { registry = {}, default = nil, inline = nil }
+    local user_editors = flat_user.editors
+
+    if type(user_editors) == 'table' then
+      local registry = {}
+      for k, v in pairs(base.registry or {}) do registry[k] = v end
+      for k, v in pairs(user_editors.registry or {}) do registry[k] = v end
+      merged.editors = {
+        registry = registry,
+        default  = user_editors.default ~= nil and user_editors.default or base.default,
+        inline   = user_editors.inline  ~= nil and user_editors.inline  or base.inline,
+      }
+    elseif flat_user.editor_cmd then
+      -- Legacy: synthesize a registry entry from editor_cmd.
+      local synth_name = '_legacy_default'
+      local registry = {}
+      for k, v in pairs(base.registry or {}) do registry[k] = v end
+      registry[synth_name] = { cmd = flat_user.editor_cmd, kind = 'external' }
+      merged.editors = {
+        registry = registry,
+        default  = synth_name,
+        inline   = base.inline,
+      }
+    else
+      merged.editors = base
+    end
+
+    -- Mirror the resolved default-editor cmd back onto editor_cmd for any
+    -- legacy reader that still expects it (palette, action descriptions
+    -- that fall through to util.resolve_editor_cmd).
+    local default_spec = merged.editors.registry[merged.editors.default]
+    merged.editor_cmd = default_spec and default_spec.cmd or flat_user.editor_cmd
+  end
+
   if merged.claude_indicators then
     local ok, claude = pcall(require, 'claude')
     if ok then
