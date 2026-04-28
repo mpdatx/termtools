@@ -106,29 +106,30 @@ end
 -- to `false` (disabled, distinct from nil-which-means-use-config).
 local function pick_editor_modal(window, pane, opts, kind, global_key, title, allow_disable)
   local registry = (opts.editors and opts.editors.registry) or {}
-  local entries = {}
-  if allow_disable then
-    entries[#entries + 1] = { name = nil, label = '(disable)' }
-  end
   local names = {}
   for name, spec in pairs(registry) do
     if spec.kind == kind then names[#names + 1] = name end
   end
+
+  if #names == 0 then
+    if window then
+      window:toast_notification('termtools',
+        'No ' .. kind .. ' editors registered.', nil, 1500)
+    end
+    return
+  end
+
   table.sort(names)
+  local entries = {}
+  if allow_disable then
+    entries[#entries + 1] = { name = nil, label = '(disable)' }
+  end
   for _, name in ipairs(names) do
     local spec = registry[name]
     entries[#entries + 1] = {
       name = name,
       label = string.format('%-12s %s', name, table.concat(spec.cmd, ' ')),
     }
-  end
-
-  if #entries == 0 then
-    if window then
-      window:toast_notification('termtools',
-        'No ' .. kind .. ' editors registered.', nil, 1500)
-    end
-    return
   end
 
   local choices = {}
@@ -221,7 +222,7 @@ function M.catalogue(opts)
     {
       label = 'Switch default editor',
       description = function()
-        local g = (require('wezterm').GLOBAL or {}).termtools_editor_default
+        local g = (wezterm.GLOBAL or {}).termtools_editor_default
         local effective = g or (opts.editors and opts.editors.default) or '?'
         return 'currently: ' .. tostring(effective)
       end,
@@ -233,7 +234,7 @@ function M.catalogue(opts)
     {
       label = 'Switch inline editor',
       description = function()
-        local g = (require('wezterm').GLOBAL or {}).termtools_editor_inline
+        local g = (wezterm.GLOBAL or {}).termtools_editor_inline
         local effective
         if g == false then effective = '(disabled)'
         else effective = g or (opts.editors and opts.editors.inline) or '(none)' end
