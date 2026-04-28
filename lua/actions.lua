@@ -17,6 +17,12 @@ local util     = require('util')
 
 local M = {}
 
+-- pane:split uses Top/Bottom for vertical splits; wezterm.action.SplitPane
+-- uses Up/Down. Accept either at the user-facing config layer (editor_spec
+-- direction, catalogue entries) and translate to pane:split's vocabulary.
+local DIRECTION_MAP = { Up = 'Top', Down = 'Bottom' }
+local function split_direction(d) return DIRECTION_MAP[d] or d end
+
 -- Spawn the configured editor on `target` (a file path or directory).
 -- editor_spec is `{ cmd = {...}, kind = 'external' | 'pane', direction? }`.
 -- position is optional `{ line = N, col = N }` — only honoured for
@@ -36,11 +42,11 @@ function M.open_in_editor(window, pane, target, editor_spec, position)
   end
 
   if editor_spec.kind == 'pane' then
-    if not window or not pane then return end
-    window:perform_action(wezterm.action.SplitPane {
-      direction = editor_spec.direction or 'Right',
-      command   = { args = args },
-    }, pane)
+    if not pane then return end
+    pane:split {
+      direction = split_direction(editor_spec.direction or 'Right'),
+      args = args,
+    }
   else
     args = require('platform').editor_launch_args(args)
     local ok, err = pcall(wezterm.background_child_process, args)
@@ -193,21 +199,23 @@ function M.catalogue(opts)
     {
       label = 'New Claude pane',
       description = 'split right; ' .. claude_cmd_str .. ' at project root',
-      run = function(window, pane, root)
-        window:perform_action(act.SplitPane {
+      run = function(_window, pane, root)
+        pane:split {
           direction = 'Right',
-          command = { args = claude_cmd, cwd = root },
-        }, pane)
+          args = claude_cmd,
+          cwd = root,
+        }
       end,
     },
     {
       label = 'New shell pane',
       description = 'split down; ' .. default_cmd_str .. ' at project root',
-      run = function(window, pane, root)
-        window:perform_action(act.SplitPane {
-          direction = 'Down',
-          command = { args = default_cmd, cwd = root },
-        }, pane)
+      run = function(_window, pane, root)
+        pane:split {
+          direction = 'Bottom',
+          args = default_cmd,
+          cwd = root,
+        }
       end,
     },
     {
