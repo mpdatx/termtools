@@ -110,6 +110,15 @@ function M.merge_defaults(defaults, user_opts)
   return merged
 end
 
+-- Pick the editor command for an "open file" action. Pure: caller threads
+-- opts. `override` (if non-nil) wins; otherwise `opts.editor_cmd`; otherwise
+-- a `{'code','%s'}` fallback so the function is safe to call before setup().
+function M.resolve_editor_cmd(override, opts)
+  if override then return override end
+  if opts and opts.editor_cmd then return opts.editor_cmd end
+  return { 'code', '%s' }
+end
+
 -- ── WezTerm-pane helpers ──────────────────────────────────────────────────
 -- These wrap two recurring patterns:
 --   pane_cwd      — resolve a pane's working directory through OSC 7/9;9

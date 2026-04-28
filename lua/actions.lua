@@ -35,14 +35,18 @@ local function cmd_to_string(template, value)
   return table.concat(parts, ' ')
 end
 
+-- Used by the open_file factory at action-fire time. The factory is
+-- often invoked from per-project `.termtools.lua` files that don't have
+-- access to the live opts table — in that case we lazy-fetch via init.
+-- Built-in catalogue entries pass `override` directly (already set up at
+-- catalogue() build time) so the lazy require there is a no-op fast path.
+-- The actual selection logic lives in util.resolve_editor_cmd; this
+-- wrapper just sources the current opts.
 local function resolve_editor_cmd(override)
   if override then return override end
   local ok, init = pcall(require, 'init')
-  if ok and init.opts then
-    local o = init.opts()
-    if o and o.editor_cmd then return o.editor_cmd end
-  end
-  return { 'code', '%s' }
+  local opts = (ok and init.opts) and init.opts() or nil
+  return util.resolve_editor_cmd(nil, opts)
 end
 
 -- Public factory for "open <root>/<filename> in the configured editor".
