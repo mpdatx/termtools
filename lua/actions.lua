@@ -100,6 +100,67 @@ function M.open_file(filename, role)
   }
 end
 
+-- Open an InputSelector listing every registry entry of the given kind.
+-- On select, set wezterm.GLOBAL[global_key] to the chosen entry name.
+-- If allow_disable is true, prepend a "(disable)" row that sets the key
+-- to `false` (disabled, distinct from nil-which-means-use-config).
+local function pick_editor_modal(window, pane, opts, kind, global_key, title, allow_disable)
+  local registry = (opts.editors and opts.editors.registry) or {}
+  local entries = {}
+  if allow_disable then
+    entries[#entries + 1] = { name = nil, label = '(disable)' }
+  end
+  local names = {}
+  for name, spec in pairs(registry) do
+    if spec.kind == kind then names[#names + 1] = name end
+  end
+  table.sort(names)
+  for _, name in ipairs(names) do
+    local spec = registry[name]
+    entries[#entries + 1] = {
+      name = name,
+      label = string.format('%-12s %s', name, table.concat(spec.cmd, ' ')),
+    }
+  end
+
+  if #entries == 0 then
+    if window then
+      window:toast_notification('termtools',
+        'No ' .. kind .. ' editors registered.', nil, 1500)
+    end
+    return
+  end
+
+  local choices = {}
+  for i, e in ipairs(entries) do
+    choices[i] = { id = tostring(i), label = e.label }
+  end
+
+  window:perform_action(
+    wezterm.action.InputSelector {
+      title = title,
+      choices = choices,
+      fuzzy = true,
+      action = wezterm.action_callback(function(w, _p, id, _label)
+        if not id then return end
+        local entry = entries[tonumber(id)]
+        if not entry then return end
+        wezterm.GLOBAL = wezterm.GLOBAL or {}
+        if allow_disable and entry.name == nil then
+          wezterm.GLOBAL[global_key] = false
+          if w then w:toast_notification('termtools',
+            'Inline editor disabled.', nil, 1500) end
+        else
+          wezterm.GLOBAL[global_key] = entry.name
+          if w then w:toast_notification('termtools',
+            kind:gsub('^%l', string.upper) .. ' editor: ' .. entry.name, nil, 1500) end
+        end
+      end),
+    },
+    pane
+  )
+end
+
 function M.catalogue(opts)
   opts = opts or {}
   -- opts.default_cmd is always populated by init.setup() (it falls through
@@ -155,6 +216,32 @@ function M.catalogue(opts)
         window:perform_action(act.SpawnCommandInNewTab {
           cwd = root, args = default_cmd,
         }, pane)
+      end,
+    },
+    {
+      label = 'Switch default editor',
+      description = function()
+        local g = (require('wezterm').GLOBAL or {}).termtools_editor_default
+        local effective = g or (opts.editors and opts.editors.default) or '?'
+        return 'currently: ' .. tostring(effective)
+      end,
+      run = function(window, pane, _root)
+        pick_editor_modal(window, pane, opts, 'external',
+          'termtools_editor_default', 'Pick default editor', false)
+      end,
+    },
+    {
+      label = 'Switch inline editor',
+      description = function()
+        local g = (require('wezterm').GLOBAL or {}).termtools_editor_inline
+        local effective
+        if g == false then effective = '(disabled)'
+        else effective = g or (opts.editors and opts.editors.inline) or '(none)' end
+        return 'currently: ' .. tostring(effective)
+      end,
+      run = function(window, pane, _root)
+        pick_editor_modal(window, pane, opts, 'pane',
+          'termtools_editor_inline', 'Pick inline editor (or disable)', true)
       end,
     },
     {
