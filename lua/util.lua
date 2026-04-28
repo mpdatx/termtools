@@ -129,6 +129,31 @@ function M.looks_like_vscode_editor(editor_cmd)
   return prog:match('code$') ~= nil or prog:match('cursor$') ~= nil
 end
 
+-- Resolve `role` ('default' | 'inline') to a concrete editor spec.
+-- Resolution order:
+--   1. wezterm.GLOBAL runtime override for the role
+--   2. opts.editors[role] → opts.editors.registry[name]
+--   3. nil (only happens for 'inline' when no inline editor is configured)
+--
+-- The runtime overrides are:
+--   wezterm.GLOBAL.termtools_editor_default — string registry name
+--   wezterm.GLOBAL.termtools_editor_inline  — string name, or false to disable
+function M.editor_spec(role, opts)
+  if not (role == 'default' or role == 'inline') then return nil end
+  local editors = opts and opts.editors
+  if type(editors) ~= 'table' then return nil end
+  local registry = editors.registry or {}
+
+  local ok_wt, wezterm = pcall(require, 'wezterm')
+  local global = (ok_wt and wezterm.GLOBAL) or {}
+  local override = global['termtools_editor_' .. role]
+
+  if override == false then return nil end -- explicit disable (inline only)
+  local name = override or editors[role]
+  if name and registry[name] then return registry[name] end
+  return nil
+end
+
 -- ── WezTerm-pane helpers ──────────────────────────────────────────────────
 -- These wrap two recurring patterns:
 --   pane_cwd      — resolve a pane's working directory through OSC 7/9;9
