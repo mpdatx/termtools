@@ -41,11 +41,10 @@ local DEFAULTS_NESTED = {
     -- e.g. `{ key = 'O', mods = 'CTRL|SHIFT' }` if you also want a hotkey.
     open_selection_key = false,
   },
-  editors = {
-    -- editor_cmd is no longer a top-level default — it lives inside the
-    -- `editors` table below (resolved per-platform in setup()). Kept as an
-    -- opt name for backward compat: setup() detects it and synthesizes a
-    -- registry entry.
+  -- Spawn commands. Not editors per se — `editor_cmd` is the legacy
+  -- single-template form that's now resolved through the `editors` opt
+  -- (see setup()), so this grouping only holds the shell + claude argv.
+  commands = {
     default_cmd = nil, -- resolved per-platform at setup time
     claude_cmd  = { 'claude' },
   },
@@ -68,7 +67,7 @@ local DEFAULTS_NESTED = {
 -- including the pass-through tables (style, claude) and any flat-form
 -- keys a user passes for backward compat.
 local DEFAULT_SECTIONS = {
-  paths = true, hotkeys = true, editors = true,
+  paths = true, hotkeys = true, commands = true,
   features = true, project_picker = true,
 }
 
