@@ -19,17 +19,10 @@ local M = {}
 
 -- Spawn the configured editor on `target` (a file path or directory).
 -- editor_spec is `{ cmd = {...}, kind = 'external' | 'pane', direction? }`.
--- For backward compat with internal call sites that haven't migrated, a
--- bare argv table is also accepted and treated as an external spec.
 -- position is optional `{ line = N, col = N }` — only honoured for
 -- VS Code / Cursor external editors (--goto path:line:col).
 function M.open_in_editor(window, pane, target, editor_spec, position)
-  if not editor_spec then return end
-  -- Tolerate a bare argv table for backward compat.
-  if editor_spec[1] then
-    editor_spec = { cmd = editor_spec, kind = 'external' }
-  end
-  if not editor_spec.cmd then return end
+  if not editor_spec or not editor_spec.cmd then return end
 
   local args
   if editor_spec.kind == 'external' and position and position.line
@@ -82,7 +75,7 @@ function M.open_file(filename, role)
       local spec = util.editor_spec(role, opts)
       local file_path = util.path_join(root, filename)
       if not spec then
-        return role == 'inline' and 'no inline editor configured' or '?'
+        return role == 'inline' and 'no inline editor configured' or 'no default editor configured'
       end
       if util.file_exists(file_path) then
         return cmd_to_string(spec.cmd, file_path)
@@ -122,7 +115,7 @@ function M.catalogue(opts)
       label = 'Open project in editor',
       description = function(root)
         local spec = util.editor_spec('default', opts)
-        if not spec then return '?' end
+        if not spec then return 'no default editor configured' end
         return cmd_to_string(spec.cmd, root)
       end,
       run = function(window, pane, root)
