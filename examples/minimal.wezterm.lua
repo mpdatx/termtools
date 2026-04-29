@@ -28,9 +28,9 @@ local TERMTOOLS = wezterm.home_dir .. '/src/termtools'
 
 return dofile(TERMTOOLS .. '/include.lua')(config, {
   -- Each of these dirs is scanned for immediate subdirs that contain a
-  -- project marker (.git/, .termtools.lua, package.json, pyproject.toml,
-  -- Cargo.toml). Found projects appear in the project picker. Adjust to
-  -- whatever parents you actually keep your projects under.
+  -- project marker (.git/, .termtools.lua, CLAUDE.md, package.json,
+  -- pyproject.toml, Cargo.toml). Found projects appear in the project
+  -- picker. Adjust to whatever parents you actually keep your projects under.
   scan_roots    = { wezterm.home_dir .. '/code', wezterm.home_dir .. '/work' },
 
   -- Roots where termtools is allowed to load `.termtools.lua` override

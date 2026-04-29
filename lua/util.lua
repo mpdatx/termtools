@@ -165,14 +165,24 @@ end
 
 function M.pane_cwd(pane)
   if not pane then return nil end
+
+  -- Process-info first: this is the OS-reported live CWD of the foreground
+  -- process, so it tracks `cd` immediately. OSC 7 is wezterm's cache of
+  -- whatever the shell last emitted — bash/zsh/fish with shell integration
+  -- emit on every prompt and stay accurate, but bare PowerShell and cmd
+  -- only emit at spawn (or never), so OSC 7 lags behind a manual chdir
+  -- there. We accept that the OSC 7 path used to win when the foreground
+  -- process was a non-shell that "owned" a different cwd (an editor :cd'd
+  -- elsewhere); that case is rare enough to not justify the staleness.
+  local ok_pi, info = pcall(pane.get_foreground_process_info, pane)
+  if ok_pi and info and type(info.cwd) == 'string' and info.cwd ~= '' then
+    return info.cwd
+  end
+
   local ok, cwd = pcall(pane.get_current_working_dir, pane)
   if ok and cwd then
     if type(cwd) == 'table' and cwd.file_path then return cwd.file_path end
     if type(cwd) == 'string' and cwd ~= '' then return cwd end
-  end
-  local ok2, info = pcall(pane.get_foreground_process_info, pane)
-  if ok2 and info and type(info.cwd) == 'string' and info.cwd ~= '' then
-    return info.cwd
   end
   return nil
 end

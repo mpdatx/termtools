@@ -7,7 +7,8 @@ local platform = require('platform')
 local M = {}
 
 local DEFAULT_MARKERS = {
-  '.git', '.termtools.lua', 'package.json', 'pyproject.toml', 'Cargo.toml',
+  '.git', '.termtools.lua', 'CLAUDE.md',
+  'package.json', 'pyproject.toml', 'Cargo.toml',
 }
 
 -- Module-level caches. discover_refresh() invalidates both.

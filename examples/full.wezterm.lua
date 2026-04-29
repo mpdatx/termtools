@@ -64,7 +64,7 @@ termtools.setup({
   claude_cmd = { 'claude' },
 
   -- Override the project-marker list (default: .git, .termtools.lua,
-  -- package.json, pyproject.toml, Cargo.toml).
+  -- CLAUDE.md, package.json, pyproject.toml, Cargo.toml).
   -- markers = { '.git', '.hg', 'go.mod' },
 
   -- Read Windows Terminal's settings.json: use its default profile as

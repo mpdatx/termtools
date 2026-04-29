@@ -197,6 +197,8 @@ function M.catalogue(opts)
     M.open_file('TODO.md', 'inline'),
     M.open_file('README.md', 'default'),
     M.open_file('README.md', 'inline'),
+    M.open_file('CLAUDE.md', 'default'),
+    M.open_file('CLAUDE.md', 'inline'),
     {
       label = 'New Claude pane',
       description = 'split right; ' .. claude_cmd_str .. ' at project root',

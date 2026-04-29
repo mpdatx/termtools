@@ -125,7 +125,7 @@ The `style` and `claude` keys are always at the top level (passed straight throu
 | `action_key`    | `{ key='A', mods='CTRL\|SHIFT' }` | Hotkey for the action picker (only used if `default_keys=true`). When `SHIFT` is in `mods`, use the uppercase letter — shift-held keypresses are uppercase, lowercase won't match. |
 | `open_selection_key` | `false`                  | Optional hotkey for "open active pane's selection as a file in the default editor" (set to e.g. `{ key='O', mods='CTRL\|SHIFT' }` to bind one). The default trigger is the **`Ctrl+Shift+Click`** mouse gesture wired by `lua/style.lua` when `apply_style=true` — drag-select a path, then `Ctrl+Shift+Click` it to open. Parses `path:line:col` suffixes; resolves relative paths against the pane's CWD; for VS Code / Cursor as the default editor, uses `--goto path:line:col` so the editor jumps to the right line. |
 
-Default project markers: `.git`, `.termtools.lua`, `package.json`, `pyproject.toml`, `Cargo.toml`.
+Default project markers: `.git`, `.termtools.lua`, `CLAUDE.md`, `package.json`, `pyproject.toml`, `Cargo.toml`.
 
 If you want to bind the hotkeys yourself (e.g. behind a leader key), set `default_keys = false` and reference `termtools.project_picker()` / `termtools.action_picker()` from your `config.keys`. See `examples/full.wezterm.lua`.
 
@@ -136,6 +136,7 @@ If you want to bind the hotkeys yourself (e.g. behind a leader key), set `defaul
 | `Open project in editor`     | Launches the default editor (`editors.default`) on `<root>` (opens the whole project folder). |
 | `Open TODO.md`               | Launches `editors.default` on `<root>/TODO.md`. The companion `Open TODO.md inline` row spawns `editors.inline` in a wezterm pane next to the active one. Both rows dim when the file doesn't exist; selecting still runs and the editor creates the file on first save. |
 | `Open README.md`             | Same, for `README.md`. Inline sibling: `Open README.md inline`. |
+| `Open CLAUDE.md`             | Same, for `CLAUDE.md`. Inline sibling: `Open CLAUDE.md inline`. |
 | `New Claude pane`            | Splits active pane right; runs `claude_cmd` with cwd at root. |
 | `New shell pane`             | Splits active pane down; runs `default_cmd` with cwd at root. |
 | `New tab at project root`    | Spawns a new tab at root running `default_cmd`. |

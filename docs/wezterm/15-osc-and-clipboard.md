@@ -129,25 +129,25 @@ if type(cwd) == 'table' and cwd.file_path then
 end
 ```
 
-When OSC 7 isn't emitted (Windows pwsh/cmd without integration), this returns `nil`. Fall back to `pane:get_foreground_process_info().cwd`. termtools' `util.pane_cwd` (`lua/util.lua:166`) is the reference shape:
+OSC 7 is wezterm's *cache* of whatever the shell most-recently emitted — bash/zsh/fish with shell integration emit on every prompt, but bare PowerShell and cmd often emit only at spawn (or never), so the OSC 7 cache lags behind a manual `cd`. `pane:get_foreground_process_info().cwd` is the OS-reported live CWD of the foreground process and tracks `cd` immediately. termtools' `util.pane_cwd` (`lua/util.lua:166`) prefers procinfo, falling back to OSC 7 only if procinfo isn't available:
 
 ```lua
 function M.pane_cwd(pane)
   if not pane then return nil end
+  local ok_pi, info = pcall(pane.get_foreground_process_info, pane)
+  if ok_pi and info and type(info.cwd) == 'string' and info.cwd ~= '' then
+    return info.cwd
+  end
   local ok, cwd = pcall(pane.get_current_working_dir, pane)
   if ok and cwd then
     if type(cwd) == 'table' and cwd.file_path then return cwd.file_path end
     if type(cwd) == 'string' and cwd ~= '' then return cwd end
   end
-  local ok2, info = pcall(pane.get_foreground_process_info, pane)
-  if ok2 and info and type(info.cwd) == 'string' and info.cwd ~= '' then
-    return info.cwd
-  end
   return nil
 end
 ```
 
-The `pcall` matters — calling `get_current_working_dir` on a pane that closed during a teardown race raises rather than returns `nil`.
+The `pcall`s matter — calling either method on a pane that closed during a teardown race raises rather than returns `nil`.
 
 ### Reading user vars: `pane:get_user_vars()`
 
@@ -223,9 +223,9 @@ wezterm.action.PasteFrom 'PrimarySelection'
 
 ## Examples
 
-### Resolve cwd via OSC 7 with procinfo fallback
+### Resolve cwd via procinfo with OSC 7 fallback
 
-`util.pane_cwd` (`lua/util.lua:166`–`178`) — see the snippet above. Used everywhere a termtools picker needs to know "where's this pane really running": project picker, action picker, claude scanner. The pcall+fallback shape is what makes termtools work on Windows pwsh without forcing users to wire OSC 7 manually.
+`util.pane_cwd` (`lua/util.lua:166`–`186`) — see the snippet above. Used everywhere a termtools picker needs to know "where's this pane really running": project picker, action picker, claude scanner. Procinfo-first is what makes termtools track manual `cd` on Windows pwsh, where OSC 7 lags behind the shell's actual working directory.
 
 ### Read the selection for an editor handoff
 

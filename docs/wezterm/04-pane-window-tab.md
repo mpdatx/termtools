@@ -94,21 +94,21 @@ In practice, the only true GUI-only object is `Window`. `Pane` and `Tab` come fr
 
 ## Examples
 
-### Resolve a pane's CWD with OSC 7 + procinfo fallback
+### Resolve a pane's CWD: procinfo first, OSC 7 fallback
 
-`util.pane_cwd` (lua/util.lua:166) handles both the new Url-userdata return type and the old string type, then falls back to `get_foreground_process_info().cwd` when no OSC 7 has been emitted (Windows pwsh/cmd by default).
+`util.pane_cwd` (lua/util.lua:166) reads `get_foreground_process_info().cwd` first because the OS-reported CWD is always live. It falls back to `get_current_working_dir()` (handling both the modern Url-userdata return type and the old string type) only when procinfo isn't available — that path covers wezterm builds without procinfo on the platform. PowerShell and cmd don't emit OSC 7 on every `cd`, so an OSC-7-first ordering would lag behind manual chdirs.
 
 ```lua
 function M.pane_cwd(pane)
   if not pane then return nil end
+  local ok_pi, info = pcall(pane.get_foreground_process_info, pane)
+  if ok_pi and info and type(info.cwd) == 'string' and info.cwd ~= '' then
+    return info.cwd
+  end
   local ok, cwd = pcall(pane.get_current_working_dir, pane)
   if ok and cwd then
     if type(cwd) == 'table' and cwd.file_path then return cwd.file_path end
     if type(cwd) == 'string' and cwd ~= '' then return cwd end
-  end
-  local ok2, info = pcall(pane.get_foreground_process_info, pane)
-  if ok2 and info and type(info.cwd) == 'string' and info.cwd ~= '' then
-    return info.cwd
   end
   return nil
 end
