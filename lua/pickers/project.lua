@@ -14,9 +14,12 @@ local projects = require('projects')
 
 local M = {}
 
--- ── Persisted state (wezterm.GLOBAL) ─────────────────────────────────────
--- Survives config reloads, resets on full WezTerm restart. Persisting to
--- disk is a TODO.
+-- ── Persisted state ──────────────────────────────────────────────────────
+-- MRU list and current sort mode live in wezterm.GLOBAL (survives config
+-- reload) and are mirrored to <config_dir>/termtools-state.json (survives
+-- full WezTerm restart). The disk file is the source of truth on a fresh
+-- process; thereafter GLOBAL is authoritative and writes flow back to disk
+-- on every push / sort cycle.
 
 local SORT_MODES = { 'smart', 'alphabetical', 'mru' }
 local MRU_CAP = 20
@@ -26,34 +29,117 @@ local function global_table()
   return wezterm.GLOBAL
 end
 
+local function state_path()
+  return wezterm.config_dir .. '/termtools-state.json'
+end
+
+local function json_encode(t)
+  if wezterm.serde and wezterm.serde.json_encode then
+    return wezterm.serde.json_encode(t)
+  end
+  if wezterm.json_encode then return wezterm.json_encode(t) end
+  return nil
+end
+
+local function json_decode(s)
+  if wezterm.serde and wezterm.serde.json_decode then
+    return wezterm.serde.json_decode(s)
+  end
+  if wezterm.json_parse then return wezterm.json_parse(s) end
+  return nil
+end
+
+local function load_state_from_disk()
+  local f = io.open(state_path(), 'r')
+  if not f then return {} end
+  local content = f:read('*a')
+  f:close()
+  if not content or content == '' then return {} end
+  local ok, parsed = pcall(json_decode, content)
+  if not ok or type(parsed) ~= 'table' then return {} end
+  return parsed
+end
+
+local function save_state_to_disk()
+  local g = global_table()
+  local payload = {
+    project_mru  = g.termtools_project_mru or {},
+    project_sort = g.termtools_project_sort,
+  }
+  local content = json_encode(payload)
+  if not content then return end -- no JSON encoder; silently skip
+  local path = state_path()
+  local tmp  = path .. '.tmp'
+  local f, err = io.open(tmp, 'w')
+  if not f then
+    wezterm.log_error('termtools: state write failed (' .. tostring(err) .. ')')
+    return
+  end
+  f:write(content)
+  f:close()
+  -- os.rename overwrites on POSIX, fails-if-exists on Windows. Remove
+  -- the destination first so the rename succeeds on both.
+  os.remove(path)
+  local ok, rerr = os.rename(tmp, path)
+  if not ok then
+    wezterm.log_error('termtools: state rename failed (' .. tostring(rerr) .. ')')
+    os.remove(tmp)
+  end
+end
+
+-- Hydrate GLOBAL from disk on first access in this module instance.
+-- If GLOBAL already holds values (e.g. survived a config reload), those
+-- win — disk state from the same process is, by construction, equal or
+-- older than what's in memory.
+local state_loaded = false
+local function ensure_state_loaded()
+  if state_loaded then return end
+  state_loaded = true
+  local on_disk = load_state_from_disk()
+  local g = global_table()
+  if not g.termtools_project_mru and type(on_disk.project_mru) == 'table' then
+    g.termtools_project_mru = on_disk.project_mru
+  end
+  if not g.termtools_project_sort and type(on_disk.project_sort) == 'string' then
+    g.termtools_project_sort = on_disk.project_sort
+  end
+end
+
 local function mru_get()
+  ensure_state_loaded()
   return global_table().termtools_project_mru or {}
 end
 
 local function mru_push(path)
   if not path or path == '' then return end
-  local mru = mru_get()
+  ensure_state_loaded()
+  local mru = global_table().termtools_project_mru or {}
   local out = { path }
   for _, p in ipairs(mru) do
     if p ~= path and #out < MRU_CAP then out[#out + 1] = p end
   end
   global_table().termtools_project_mru = out
+  save_state_to_disk()
 end
 
 local function get_sort_mode(opts)
+  ensure_state_loaded()
   return global_table().termtools_project_sort or opts.project_sort or 'smart'
 end
 
 function M.cycle_sort()
+  ensure_state_loaded()
   local current = get_sort_mode({})
   for i, mode in ipairs(SORT_MODES) do
     if mode == current then
       local nxt = SORT_MODES[(i % #SORT_MODES) + 1]
       global_table().termtools_project_sort = nxt
+      save_state_to_disk()
       return nxt
     end
   end
   global_table().termtools_project_sort = 'smart'
+  save_state_to_disk()
   return 'smart'
 end
 
