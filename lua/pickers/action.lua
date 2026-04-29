@@ -43,6 +43,59 @@ local function action_group(action)
   return 'project'
 end
 
+-- ── Vimium-style 2-letter shortcuts ──────────────────────────────────────
+-- Each visible action gets a stable 2-letter code shown as a prefix in the
+-- picker (e.g. "qj  Open TODO.md"). Typing the code in the fuzzy filter
+-- narrows the picker to that one action; press Enter to fire it.
+--
+-- The pool is restricted to digraphs that don't naturally occur in our
+-- action labels or in normal English text — so typing a code matches only
+-- the entry it was assigned to, not random label substrings.
+--
+-- Codes are picked by hashing the label (djb2) into the pool, with linear
+-- probing on collisions. Probing happens in label-sorted order so that the
+-- assignment is stable across runs given the same set of actions present.
+-- Adding a new action with a colliding hash can shift codes for actions it
+-- collides with, but the pool is large enough that this is rare in practice.
+
+local SHORTCUT_POOL = {
+  'jq','jx','jz','qj','qk','qx','qz','vk','vq','vx','vz',
+  'xj','xk','xq','xv','xz','zj','zq','zv','zx',
+  'kq','kx','kz','fq','fx','fz','wq','wx','wj','wz',
+  'yq','yx','yz','pq','pz','hx','mx','mz','tx','tz',
+  'bq','bx','bz','dx','dz','gq','gx','gz',
+}
+
+local function djb2(s)
+  local h = 5381
+  for i = 1, #s do
+    h = (h * 33 + s:byte(i)) % 0x7FFFFFFF
+  end
+  return h
+end
+
+local function assign_shortcuts(labels)
+  local sorted = {}
+  for _, l in ipairs(labels) do sorted[#sorted + 1] = l end
+  table.sort(sorted)
+
+  local out, used = {}, {}
+  local n = #SHORTCUT_POOL
+  for _, label in ipairs(sorted) do
+    local start = (djb2(label) % n) + 1
+    for k = 0, n - 1 do
+      local probe = ((start - 1 + k) % n) + 1
+      local code = SHORTCUT_POOL[probe]
+      if not used[code] then
+        used[code] = true
+        out[label] = code
+        break
+      end
+    end
+  end
+  return out
+end
+
 -- Stable sort `labels` by (group order, original index). Lua's table.sort
 -- isn't stable, so we carry the original index as a secondary key.
 local function sort_by_group(labels, by_label)
@@ -144,12 +197,12 @@ function M.run(window, pane, opts)
 
   local order, by_label, override, dimmed, disabled = build_action_list(root, opts)
   local proj_name = (override and override.name) or util.basename(root)
+  local shortcut = assign_shortcuts(order)
 
-  -- Two-column display: pad each label to the longest, then append the
-  -- action's description (when supplied). Fuzzy match runs over the whole
-  -- visible string, so users can match against either the label or the
-  -- description text. Both dimmed (advisory) and disabled (inert) entries
-  -- are sorted below the enabled ones and rendered dim/grey.
+  -- Three-column display: shortcut | padded label | description. Fuzzy
+  -- match runs over the whole visible string, so typing the 2-letter code
+  -- matches only that row (the pool is digraph-rare; see comment above on
+  -- assign_shortcuts). Dimmed and disabled entries are styled grey/italic.
   local max_w = 0
   for _, label in ipairs(order) do
     if #label > max_w then max_w = #label end
@@ -166,9 +219,13 @@ function M.run(window, pane, opts)
       desc = action.description
     end
 
-    local plain = (desc and desc ~= '')
+    local body = (desc and desc ~= '')
       and string.format('%-' .. max_w .. 's   %s', label, desc)
       or label
+    -- Two-space gutter after the code so the shortcut visually separates
+    -- from the label; '  ' (two spaces) is a no-op fallback when the pool
+    -- is exhausted so columns stay aligned.
+    local sc = shortcut[label] or '  '
 
     local display
     if dimmed[label] or disabled[label] then
@@ -176,13 +233,21 @@ function M.run(window, pane, opts)
       -- schemes. Half-intensity stacked on Solarized's Grey (~#586e75) drops
       -- it to ~#2c3a3e, which is invisible against base03 (#002b36).
       display = wezterm.format {
+        { Foreground = { Color = '#586e75' } },
+        { Text = sc .. '  ' },
+        'ResetAttributes',
         { Attribute = { Italic = true } },
         { Foreground = { Color = '#93a1a1' } },
-        { Text = plain },
+        { Text = body },
         'ResetAttributes',
       }
     else
-      display = plain
+      display = wezterm.format {
+        { Foreground = { Color = '#586e75' } },
+        { Text = sc .. '  ' },
+        'ResetAttributes',
+        { Text = body },
+      }
     end
     choices[i] = { id = tostring(i), label = display }
   end
