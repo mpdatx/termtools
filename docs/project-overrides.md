@@ -74,6 +74,27 @@ Three states result:
 
 The wezterm command palette only surfaces enabled and dimmed entries — it has no idiomatic way to render an inert row, so disabled ones are hidden there.
 
+## Grouping: optional `group`
+
+Within each enabled / dimmed / disabled bucket, actions are sorted by group. Set `group = '...'` on an action to place it deliberately; otherwise the picker infers from the label prefix.
+
+```lua
+{ label = 'Run unit tests', group = 'spawn', run = function(...) ... end }
+```
+
+Group order in the picker:
+
+| Group          | Default content                                              |
+| -------------- | ------------------------------------------------------------ |
+| `open-project` | `Open project in editor`                                     |
+| `open-file`    | `Open <file>` actions (TODO, README, `actions.open_file(...)` results) |
+| `spawn`        | `New <something>` actions (panes, tabs, profile spawns)      |
+| `editor`       | `Switch <role> editor` actions                               |
+| `project`      | per-project overrides without a recognisable prefix (the default if no `group` is set and no prefix matches) |
+| `admin`        | `Refresh projects`, `Cycle project sort`                     |
+
+Inference rules (applied when `group` isn't set): `Open project ` → `open-project`, `Open ` → `open-file`, `New ` → `spawn`, `Switch ` → `editor`. Anything else falls into `project`.
+
 ### Helper: `actions.open_file(filename, role)`
 
 The built-in `Open TODO.md` / `Open README.md` entries are produced by this factory. `role` is `'default'` (an external editor — VS Code etc.) or `'inline'` (a terminal editor in a wezterm pane — nvim etc.) and resolves through the `editors` opt at fire time, picking up runtime `Switch X editor` overrides. The factory dims when the file doesn't exist and updates its description to indicate creation. Reuse it from your override file:

@@ -17,6 +17,52 @@ local actions  = require('actions')
 
 local M = {}
 
+-- Group classification for the action picker. Entries appear in this order;
+-- within a group, original insertion order is preserved.
+local GROUP_ORDER = {
+  'open-project', 'open-file', 'spawn', 'editor', 'project', 'admin',
+}
+local GROUP_INDEX = {}
+for i, g in ipairs(GROUP_ORDER) do GROUP_INDEX[g] = i end
+
+-- Label-prefix → group, applied when an action doesn't set `group`
+-- explicitly. Order matters: 'Open project ' must be tested before 'Open '.
+local PREFIX_GROUPS = {
+  { 'Open project ', 'open-project' },
+  { 'Open ',         'open-file'    },
+  { 'New ',          'spawn'        },
+  { 'Switch ',       'editor'       },
+}
+
+local function action_group(action)
+  if action.group then return action.group end
+  for _, pair in ipairs(PREFIX_GROUPS) do
+    local prefix, group = pair[1], pair[2]
+    if action.label:sub(1, #prefix) == prefix then return group end
+  end
+  return 'project'
+end
+
+-- Stable sort `labels` by (group order, original index). Lua's table.sort
+-- isn't stable, so we carry the original index as a secondary key.
+local function sort_by_group(labels, by_label)
+  local with_idx = {}
+  for i, label in ipairs(labels) do
+    with_idx[i] = {
+      label = label,
+      idx   = i,
+      grp   = GROUP_INDEX[action_group(by_label[label])] or #GROUP_ORDER + 1,
+    }
+  end
+  table.sort(with_idx, function(a, b)
+    if a.grp ~= b.grp then return a.grp < b.grp end
+    return a.idx < b.idx
+  end)
+  local out = {}
+  for i, e in ipairs(with_idx) do out[i] = e.label end
+  return out
+end
+
 local function build_action_list(root, opts)
   local builtin = actions.catalogue(opts)
   local override = projects.load_overrides(root, opts.trusted_paths)
@@ -56,6 +102,11 @@ local function build_action_list(root, opts)
       enabled[#enabled + 1] = label
     end
   end
+
+  -- Group within each three-way bucket. Disabled stays in insertion order
+  -- (it's already visually inert at the bottom; further sorting adds noise).
+  enabled     = sort_by_group(enabled,     resolved)
+  dimmed_list = sort_by_group(dimmed_list, resolved)
 
   local order = {}
   for _, l in ipairs(enabled) do order[#order + 1] = l end

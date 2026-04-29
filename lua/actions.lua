@@ -181,6 +181,7 @@ function M.catalogue(opts)
   local list = {
     {
       label = 'Open project in editor',
+      group = 'open-project',
       description = function(root)
         local spec = util.editor_spec('default', opts)
         if not spec then return 'no default editor configured' end
@@ -255,6 +256,7 @@ function M.catalogue(opts)
     },
     {
       label = 'Refresh projects',
+      group = 'admin',
       description = 'invalidate the project discovery cache',
       run = function(window, _pane, _root)
         require('projects').discover_refresh()
@@ -265,6 +267,7 @@ function M.catalogue(opts)
     },
     {
       label = 'Cycle project sort',
+      group = 'admin',
       description = function()
         return 'currently: ' .. require('pickers').current_project_sort()
       end,
