@@ -49,10 +49,18 @@ function M.find_root(cwd, markers)
   if not cwd then return nil end
   local marker_set = build_marker_set(markers or DEFAULT_MARKERS)
   local dir = util.normalize(cwd)
+  -- Cycle guard: util.parent_dir is supposed to converge on a root that
+  -- util.is_root recognises, but a malformed path (e.g. a Url that came
+  -- through with a format the platform normaliser didn't fully handle) can
+  -- send `parent_dir` into a fixed point that's not detected as root,
+  -- locking the GUI thread. Bailing on a repeat keeps the failure mode at
+  -- "no root detected" rather than "wezterm hangs".
   while dir do
     if dir_contains_any(dir, marker_set) then return dir end
     if util.is_root(dir) then break end
-    dir = util.parent_dir(dir)
+    local nxt = util.parent_dir(dir)
+    if not nxt or nxt == dir then break end
+    dir = nxt
   end
   return nil
 end

@@ -51,10 +51,14 @@ function M.resolve_argv(args)
   return args
 end
 
--- Apply OS-specific normalisation to a forward-slash-normalised path. Here we
--- uppercase the drive letter so paths compare equal regardless of how the
--- user typed it.
+-- Apply OS-specific normalisation to a forward-slash-normalised path.
+--   1. Strip a leading slash before a drive letter — wezterm's Url.file_path
+--      reports Windows paths as "/G:/foo" and the rest of util expects
+--      "G:/foo".
+--   2. Uppercase the drive letter so paths compare equal regardless of how
+--      the user typed it.
 function M.normalize_path(path)
+  path = path:gsub('^/(%a:)', '%1')
   return (path:gsub('^(%a):', function(c) return c:upper() .. ':' end))
 end
 
