@@ -32,8 +32,22 @@ function M.entries(_window, pane, opts)
   }
 
   local cwd = util.pane_cwd(pane)
-  local root = projects.find_root(cwd) or cwd
+  local domain = util.pane_domain(pane)
+  -- Mirrors pickers/action.lua M.run: walk up only when the pane's domain
+  -- is one whose filesystem we can probe locally (unix_domains and the
+  -- user-supplied `local_domains` list, plus the built-in 'local').
+  local root
+  if util.is_local_domain(domain) then
+    root = projects.find_root(cwd) or cwd
+  else
+    root = cwd
+  end
   if not root then return entries end
+
+  -- Same domain-stash as pickers/action.lua M.run so action factories
+  -- skip local-fs existence checks for non-local panes when this palette
+  -- pass enumerates them.
+  util.set_active_pane_domain(domain)
 
   local override = projects.load_overrides(root, opts.trusted_paths)
   local proj_name = (override and override.name) or util.basename(root)

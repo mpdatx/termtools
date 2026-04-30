@@ -187,13 +187,29 @@ end
 function M.run(window, pane, opts)
   opts = opts or {}
   local cwd = util.pane_cwd(pane)
-  local root = projects.find_root(cwd) or cwd
+  local domain = util.pane_domain(pane)
+  -- For domains whose filesystem the GUI can't probe locally, find_root
+  -- can't walk up looking for marker files (io.open / read_dir target the
+  -- GUI's local fs only). Treat the pane's live cwd as the project root
+  -- directly — sacrifices the marker invariant but keeps actions firing
+  -- against the right path. unix_domains and `local_domains`-listed
+  -- entries count as local; see util.is_local_domain.
+  local root
+  if util.is_local_domain(domain) then
+    root = projects.find_root(cwd) or cwd
+  else
+    root = cwd
+  end
   if not root then
     window:toast_notification('termtools',
       'Could not determine current directory; action picker unavailable.',
       nil, 3000)
     return
   end
+
+  -- Stash so action factories' description / dimmed_when see the live
+  -- domain without us having to thread pane through every predicate call.
+  util.set_active_pane_domain(domain)
 
   local order, by_label, override, dimmed, disabled = build_action_list(root, opts)
   local proj_name = (override and override.name) or util.basename(root)

@@ -30,6 +30,11 @@ local DEFAULTS_NESTED = {
     pinned        = {},
     trusted_paths = {},
     markers       = nil, -- nil = use projects.lua's defaults
+    -- Domain names whose filesystem the GUI can probe locally (io.open etc.).
+    -- 'local' is always implicitly included; config.unix_domains entries are
+    -- detected automatically at apply() time. Use this list only for the
+    -- unusual cases (e.g. a TLS client to a same-host mux).
+    local_domains = {},
   },
   hotkeys = {
     default_keys       = false,
@@ -232,6 +237,24 @@ local handlers_registered = false
 
 function M.apply(config)
   local o = M.opts()
+
+  -- Build the set of domain names whose filesystem the GUI can probe
+  -- locally. config.unix_domains entries are local by definition (unix
+  -- sockets only work on the same machine). User-supplied `local_domains`
+  -- adds to that list — for unusual cases like a TLS-client mux on the
+  -- same host, where the domain isn't a unix_domain but is still local.
+  do
+    local locals = {}
+    for _, d in ipairs(config.unix_domains or {}) do
+      if type(d) == 'table' and type(d.name) == 'string' then
+        locals[#locals + 1] = d.name
+      end
+    end
+    for _, n in ipairs(o.local_domains or {}) do
+      locals[#locals + 1] = n
+    end
+    require('util').set_local_domains(locals)
+  end
 
   -- Apply opinionated style defaults BEFORE keys are wired so any styling
   -- that touches config.keys / config.mouse_bindings doesn't clobber later

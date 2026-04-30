@@ -83,12 +83,23 @@ function M.open_file(filename, role)
       if not spec then
         return role == 'inline' and 'no inline editor configured' or 'no default editor configured'
       end
+      -- For domains whose filesystem the GUI can't probe locally
+      -- (ssh_domains, tls_clients, etc.), drop the create-if-missing hint
+      -- and just show the cmd we'd run. unix_domains and `local_domains`
+      -- entries count as local — see util.is_local_domain.
+      if not util.is_local_domain(util.active_pane_domain()) then
+        return cmd_to_string(spec.cmd, file_path)
+      end
       if util.file_exists(file_path) then
         return cmd_to_string(spec.cmd, file_path)
       end
       return 'create ' .. file_path .. ' (file does not exist)'
     end,
     dimmed_when = function(root)
+      -- Skip the existence probe when we can't reach the pane's filesystem
+      -- locally — io.open against a remote path would always fail and dim
+      -- every Open <file> row even when the file exists on the remote.
+      if not util.is_local_domain(util.active_pane_domain()) then return false end
       return not util.file_exists(util.path_join(root, filename))
     end,
     run = function(window, pane, root)

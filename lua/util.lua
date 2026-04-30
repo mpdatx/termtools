@@ -163,6 +163,49 @@ end
 --                   window) and call `fn(pane, tab, win)`. If `fn` returns
 --                   non-nil, walking stops and the value is returned.
 
+-- Domain a pane belongs to (e.g. 'local', 'mux', 'myhost'). Defaults to
+-- 'local' if the call raises or the method is missing — keeps the rest
+-- of the codebase's "assume local" behaviour stable for older wezterm.
+function M.pane_domain(pane)
+  if not pane then return 'local' end
+  local ok, dn = pcall(pane.domain_name, pane)
+  return (ok and type(dn) == 'string' and dn) or 'local'
+end
+
+-- Picker dispatchers stash the active pane's domain here at picker-open
+-- time so action factories (open_file etc.) can adjust their description /
+-- dimmed_when behaviour without taking pane as a parameter. 'local' is
+-- the safe default — predicates that fall through to the existence-check
+-- branch behave as they always have for `local` panes.
+local active_pane_domain = 'local'
+
+function M.set_active_pane_domain(d)
+  active_pane_domain = d or 'local'
+end
+
+function M.active_pane_domain()
+  return active_pane_domain
+end
+
+-- Set of domain names whose filesystem the GUI's local Lua can probe via
+-- io.open / read_dir. Always includes the built-in 'local' domain.
+-- termtools.apply() populates this at config-load time from config.unix_domains
+-- (unix sockets are by definition same-machine) plus any user-supplied
+-- `local_domains` opt for the unusual cases (e.g. a TLS client connecting to
+-- a mux on the same host).
+local local_domain_names = { ['local'] = true }
+
+function M.set_local_domains(names)
+  local_domain_names = { ['local'] = true }
+  for _, n in ipairs(names or {}) do
+    if type(n) == 'string' and n ~= '' then local_domain_names[n] = true end
+  end
+end
+
+function M.is_local_domain(name)
+  return local_domain_names[name or 'local'] == true
+end
+
 function M.pane_cwd(pane)
   if not pane then return nil end
 

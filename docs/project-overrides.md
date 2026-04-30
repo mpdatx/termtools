@@ -74,6 +74,33 @@ Three states result:
 
 The wezterm command palette only surfaces enabled and dimmed entries — it has no idiomatic way to render an inert row, so disabled ones are hidden there.
 
+### Predicates and remote panes
+
+If the active pane lives in a domain whose filesystem the GUI can't reach locally (ssh_domains, tls_clients to a different host, etc.), `io.open` / `wezterm.read_dir` / `util.file_exists` all probe the GUI's local fs and give the wrong answer for that pane's files. A `dimmed_when` like `not util.file_exists(util.path_join(root, 'TODO.md'))` would dim every row even when the file genuinely exists on the remote.
+
+termtools tracks which domains are "filesystem-local". The set is:
+
+- The built-in `'local'` domain.
+- Every entry in `config.unix_domains` (unix sockets only work on the same machine, so they're always local).
+- Every name in `setup({ local_domains = { ... } })` — for unusual cases like a TLS client connecting to a mux on the same host where the domain isn't a unix_domain but the filesystem is still reachable.
+
+Use `util.is_local_domain(domain)` together with `util.active_pane_domain()` to gate filesystem-probing predicates:
+
+```lua
+local util = require('util')
+
+dimmed_when = function(root)
+  if not util.is_local_domain(util.active_pane_domain()) then
+    return false   -- can't reach the remote fs, fail open
+  end
+  return not util.file_exists(util.path_join(root, 'logs/server.log'))
+end,
+```
+
+Returning `false` (don't dim) is the right "fail open" for non-local-fs panes — the action will fire and either succeed or be a no-op, but it won't be misleadingly dimmed.
+
+The built-in `actions.open_file` factory already handles this — its `dimmed_when` and `description` skip the existence check on domains that aren't filesystem-local.
+
 ## Grouping: optional `group`
 
 Within each enabled / dimmed / disabled bucket, actions are sorted by group. Set `group = '...'` on an action to place it deliberately; otherwise the picker infers from the label prefix.
