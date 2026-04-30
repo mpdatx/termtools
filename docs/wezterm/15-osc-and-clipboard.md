@@ -329,6 +329,8 @@ Older wezterm returned a string. Modern wezterm returns a `Url` userdata with `.
 
 The grammar is `file://HOSTNAME/PATH`. An empty hostname (`file:///path`) is technically legal but some wezterm versions and downstream consumers misparse it. Always include a hostname (`$HOSTNAME` on Unix, `$env:COMPUTERNAME` on Windows). Paths with spaces should be URL-encoded (`%20`) — bash and zsh's standard helpers do this; hand-rolled `printf "\033]7;file://...\033\\"` will silently break on `~/My Documents`.
 
+Termtools' user-side guide for emitting OSC 7 from each common shell — required when running mux/SSH-attached panes since procinfo doesn't always travel over the mux protocol — lives at [`docs/shell-integration.md`](../shell-integration.md).
+
 ### OSC 133 markers depend on shell integration
 
 Bare `pwsh.exe` and `cmd.exe` don't emit prompt markers. Without them, `SelectTextAtMouseCursor 'SemanticZone'` falls back to `'Line'` and `pane:get_semantic_zones()` returns an empty list. termtools' `style.lua` notes this in mouse-binding gotchas. Wire the shell-integration scripts wezterm ships with, or note in your readme that semantic-zone features need them.

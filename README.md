@@ -75,6 +75,8 @@ After any of these, restart WezTerm. `Ctrl+P` opens the project picker; `Ctrl+Sh
 
 > **Note**: `include.lua` clears `package.loaded[…]` so most edits to termtools' Lua modules are picked up on a config reload (`Ctrl+Shift+R`). But changes that affect `wezterm.on` event registrations or palette augmentation sometimes need a **full WezTerm restart** (close every window). If a code change you expect to see isn't taking effect, that's the first thing to try.
 
+> **Mux / multi-client setups**: if you run wezterm-mux-server (locally or remote) and your panes live in a `unix_domains` / `tls_clients` / `ssh_domains` domain, you'll likely need shell integration so termtools can see each pane's live CWD. Bare PowerShell and cmd don't emit OSC 7 on `cd`, and procinfo doesn't always travel over the mux protocol — so without integration the action picker can't resolve a project root. See **[docs/shell-integration.md](docs/shell-integration.md)** for the snippets to drop into your shell profile (PowerShell / bash / zsh / fish).
+
 ### Command palette integration
 
 termtools also augments WezTerm's built-in command palette (`Ctrl+Shift+P`). Open it and you'll see:
