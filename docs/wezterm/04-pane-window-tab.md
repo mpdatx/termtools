@@ -107,8 +107,12 @@ function M.pane_cwd(pane)
   end
   local ok, cwd = pcall(pane.get_current_working_dir, pane)
   if ok and cwd then
-    if type(cwd) == 'table' and cwd.file_path then return cwd.file_path end
     if type(cwd) == 'string' and cwd ~= '' then return cwd end
+    -- Url userdata (modern) or path-table (transitional) — both expose
+    -- .file_path. type(userdata) ~= 'table', so we can't gate on table
+    -- here; pcall the index access in case it raises.
+    local ok_fp, fp = pcall(function() return cwd.file_path end)
+    if ok_fp and type(fp) == 'string' and fp ~= '' then return fp end
   end
   return nil
 end
