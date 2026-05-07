@@ -106,9 +106,12 @@ function M.open_file(filename, role)
       local opts = require('init').opts()
       local spec = util.editor_spec(role, opts)
       if not spec then
-        if role == 'inline' and window then
-          window:toast_notification('termtools',
-            'inline editor not configured.', nil, 1500)
+        if role == 'inline' then
+          util.flash_status(window, 'inline editor not configured', 1500)
+          if window then
+            window:toast_notification('termtools',
+              'inline editor not configured.', nil, 1500)
+          end
         end
         return
       end
@@ -129,9 +132,10 @@ local function pick_editor_modal(window, pane, opts, kind, global_key, title, al
   end
 
   if #names == 0 then
+    local msg = 'No ' .. kind .. ' editors registered.'
+    util.flash_status(window, msg, 1500)
     if window then
-      window:toast_notification('termtools',
-        'No ' .. kind .. ' editors registered.', nil, 1500)
+      window:toast_notification('termtools', msg, nil, 1500)
     end
     return
   end
@@ -164,15 +168,16 @@ local function pick_editor_modal(window, pane, opts, kind, global_key, title, al
         local entry = entries[tonumber(id)]
         if not entry then return end
         wezterm.GLOBAL = wezterm.GLOBAL or {}
+        local msg
         if allow_disable and entry.name == nil then
           wezterm.GLOBAL[global_key] = false
-          if w then w:toast_notification('termtools',
-            'Inline editor disabled.', nil, 1500) end
+          msg = 'Inline editor disabled.'
         else
           wezterm.GLOBAL[global_key] = entry.name
-          if w then w:toast_notification('termtools',
-            kind:gsub('^%l', string.upper) .. ' editor: ' .. entry.name, nil, 1500) end
+          msg = kind:gsub('^%l', string.upper) .. ' editor: ' .. entry.name
         end
+        util.flash_status(w, msg, 1500)
+        if w then w:toast_notification('termtools', msg, nil, 1500) end
       end),
     },
     pane
@@ -268,11 +273,50 @@ function M.catalogue(opts)
       end,
     },
     {
+      label = 'Pin/Unpin current project',
+      group = 'admin',
+      description = function(root)
+        -- Config-declared pins (opts.pinned) are read-only here — editing
+        -- belongs in the user's wezterm config, not in this action.
+        for _, p in ipairs(opts.pinned or {}) do
+          if util.normalize(p) == root then
+            return 'pinned in setup({}); edit your wezterm config to remove'
+          end
+        end
+        local state = require('state')
+        if state.is_pinned(root) then
+          return 'currently pinned (select to unpin)'
+        end
+        return 'add ' .. root .. ' to your pinned projects'
+      end,
+      run = function(window, _pane, root)
+        for _, p in ipairs(opts.pinned or {}) do
+          if util.normalize(p) == root then
+            local msg = 'pinned in setup({}); edit your wezterm config'
+            util.flash_status(window, msg, 2500)
+            if window then
+              window:toast_notification('termtools', msg, nil, 2500)
+            end
+            return
+          end
+        end
+        local state = require('state')
+        local now_pinned = state.toggle_pin(root)
+        require('projects').discover_refresh()
+        local msg = (now_pinned and 'Pinned: ' or 'Unpinned: ') .. root
+        util.flash_status(window, msg, 1500)
+        if window then
+          window:toast_notification('termtools', msg, nil, 1500)
+        end
+      end,
+    },
+    {
       label = 'Refresh projects',
       group = 'admin',
       description = 'invalidate the project discovery cache',
       run = function(window, _pane, _root)
         require('projects').discover_refresh()
+        util.flash_status(window, 'Project cache refreshed', 1500)
         if window then
           window:toast_notification('termtools', 'Project cache refreshed.', nil, 2000)
         end
@@ -286,9 +330,10 @@ function M.catalogue(opts)
       end,
       run = function(window, _pane, _root)
         local new_mode = require('pickers').cycle_project_sort()
+        local msg = 'Project sort: ' .. new_mode
+        util.flash_status(window, msg, 1500)
         if window then
-          window:toast_notification('termtools',
-            'Project sort: ' .. new_mode, nil, 1500)
+          window:toast_notification('termtools', msg, nil, 1500)
         end
       end,
     },

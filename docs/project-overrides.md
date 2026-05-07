@@ -118,7 +118,7 @@ Group order in the picker:
 | `spawn`        | `New <something>` actions (panes, tabs, profile spawns)      |
 | `editor`       | `Switch <role> editor` actions                               |
 | `project`      | per-project overrides without a recognisable prefix (the default if no `group` is set and no prefix matches) |
-| `admin`        | `Refresh projects`, `Cycle project sort`                     |
+| `admin`        | `Pin/Unpin current project`, `Refresh projects`, `Cycle project sort` |
 
 Inference rules (applied when `group` isn't set): `Open project ` → `open-project`, `Open ` → `open-file`, `New ` → `spawn`, `Switch ` → `editor`. Anything else falls into `project`.
 

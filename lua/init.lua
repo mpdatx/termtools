@@ -324,8 +324,14 @@ function M.apply(config)
       pickers.run_action_picker(window, pane, M.opts())
     end)
 
-    wezterm.on('termtools.run-action', function(window, pane, root, label)
-      pickers.run_action_by_label(window, pane, root, label, M.opts())
+    wezterm.on('termtools.run-action', function(window, pane)
+      -- (root, label) come from wezterm.GLOBAL — see palette.lua for why
+      -- they can't ride along on EmitEvent itself.
+      local pending = wezterm.GLOBAL and wezterm.GLOBAL.termtools_pending_action
+      if not pending then return end
+      wezterm.GLOBAL.termtools_pending_action = nil
+      pickers.run_action_by_label(window, pane,
+        pending.root, pending.label, M.opts())
     end)
 
     wezterm.on('termtools.open-selection', function(window, pane)

@@ -53,13 +53,31 @@ function M.entries(_window, pane, opts)
   local proj_name = (override and override.name) or util.basename(root)
 
   for _, action in ipairs(pickers.list_actions(root, opts)) do
+    -- Per-entry capture for the closure below — `action` is the loop var.
+    local entry_root, entry_label = root, action.label
     entries[#entries + 1] = {
       brief = string.format('termtools [%s]: %s', proj_name, action.label),
       icon  = 'cod_terminal',
-      -- Indirect via wezterm event so the action runs after the palette
-      -- has fully closed. Direct action_callback dispatch from the
-      -- palette can race with the palette teardown and silently no-op.
-      action = wezterm.action.EmitEvent('termtools.run-action', root, action.label),
+      -- Two-step dispatch:
+      --   1. action_callback fires when the user picks the entry; it just
+      --      stashes (root, label) in wezterm.GLOBAL — no I/O, no modal,
+      --      so no race surface against the palette teardown.
+      --   2. perform_action queues an EmitEvent that wezterm fires after
+      --      the palette has fully closed; the handler reads the stash
+      --      and runs the action.
+      -- We can't pass args directly through EmitEvent — its KeyAssignment
+      -- form takes only the event name, so any extras get dropped on the
+      -- floor (this was the original cause of run_by_label receiving
+      -- label=nil, root=nil and silently no-op'ing).
+      action = wezterm.action_callback(function(window, pane)
+        wezterm.GLOBAL = wezterm.GLOBAL or {}
+        wezterm.GLOBAL.termtools_pending_action = {
+          root  = entry_root,
+          label = entry_label,
+        }
+        window:perform_action(
+          wezterm.action.EmitEvent('termtools.run-action'), pane)
+      end),
     }
   end
 

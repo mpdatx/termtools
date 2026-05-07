@@ -106,6 +106,15 @@ function M.discover(opts)
 
   for _, path in ipairs(opts.pinned or {}) do add(path, 'pinned') end
 
+  -- User-pinned (mutable, persisted via the action picker's Pin/Unpin
+  -- action). Loaded last so config-pinned wins for the `source` field
+  -- when the same path is in both lists. Cache invalidation on pin/unpin
+  -- happens via discover_refresh() in the action handler.
+  local ok_state, state = pcall(require, 'state')
+  if ok_state then
+    for _, path in ipairs(state.user_pinned()) do add(path, 'user-pinned') end
+  end
+
   table.sort(list, function(a, b) return a.name:lower() < b.name:lower() end)
 
   cache.discovered = list

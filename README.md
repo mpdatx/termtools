@@ -145,6 +145,7 @@ If you want to bind the hotkeys yourself (e.g. behind a leader key), set `defaul
 | `New tab at project root`    | Spawns a new tab at root running `default_cmd`. |
 | `Switch default editor`      | Open a picker listing every external-kind editor in `editors.registry`. Selection sets `wezterm.GLOBAL.termtools_editor_default`; persists across config reloads, resets on full WezTerm restart. |
 | `Switch inline editor`       | Same shape for pane-kind editors. Includes a `(disable)` row that turns the inline variant off until you set it again. |
+| `Pin/Unpin current project`  | Toggle the active project's membership in the persisted user-pinned list. Pinned projects always appear in the picker even if they're outside `scan_roots`. Stored in `<wezterm.config_dir>/termtools-state.json` so it survives full restarts. Projects already declared in `setup({ pinned = … })` show a description noting the config source and can't be unpinned from the action picker. |
 | `Refresh projects`           | Invalidates the discovery cache. |
 | `Cycle project sort`         | Cycle the project picker's sort mode (smart → alphabetical → mru → smart). Toasts the new mode; persists in `wezterm.GLOBAL`. |
 | `New tab: <profile>` (×N)    | One per Windows Terminal profile when `wt_profiles = true`. Currently commented out in `lua/actions.lua`; uncomment the block at the bottom to re-enable. |

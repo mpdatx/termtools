@@ -201,9 +201,9 @@ function M.run(window, pane, opts)
     root = cwd
   end
   if not root then
-    window:toast_notification('termtools',
-      'Could not determine current directory; action picker unavailable.',
-      nil, 3000)
+    local msg = 'Could not determine current directory; action picker unavailable.'
+    util.flash_status(window, msg, 3000)
+    window:toast_notification('termtools', msg, nil, 3000)
     return
   end
 
@@ -279,8 +279,9 @@ function M.run(window, pane, opts)
         if not idx or not order[idx] then return end
         local picked = order[idx]
         if disabled[picked] then
-          w:toast_notification('termtools',
-            picked .. ' is unavailable for this project.', nil, 1500)
+          local msg = picked .. ' is unavailable for this project.'
+          util.flash_status(w, msg, 1500)
+          w:toast_notification('termtools', msg, nil, 1500)
           return
         end
         local entry = by_label[picked]

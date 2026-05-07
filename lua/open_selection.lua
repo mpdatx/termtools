@@ -24,8 +24,9 @@ function M.run(window, pane, opts)
   opts = opts or {}
   local raw = window:get_selection_text_for_pane(pane)
   if not raw or raw == '' then
-    window:toast_notification('termtools',
-      'No selection — highlight a file path first.', nil, 1500)
+    local msg = 'No selection — highlight a file path first.'
+    util.flash_status(window, msg, 1500)
+    window:toast_notification('termtools', msg, nil, 1500)
     return
   end
 
@@ -45,8 +46,9 @@ function M.run(window, pane, opts)
   end
 
   if not util.file_exists(path) then
-    window:toast_notification('termtools',
-      'No such file: ' .. path, nil, 2500)
+    local msg = 'No such file: ' .. path
+    util.flash_status(window, msg, 2500)
+    window:toast_notification('termtools', msg, nil, 2500)
     return
   end
 
@@ -55,8 +57,9 @@ function M.run(window, pane, opts)
   -- --goto form when the editor supports it.
   local spec = util.editor_spec('default', opts)
   if not spec then
-    window:toast_notification('termtools',
-      'no default editor configured.', nil, 1500)
+    local msg = 'no default editor configured.'
+    util.flash_status(window, msg, 1500)
+    window:toast_notification('termtools', msg, nil, 1500)
     return
   end
   actions.open_in_editor(window, pane, path, spec,

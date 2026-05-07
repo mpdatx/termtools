@@ -100,6 +100,41 @@ function M.basename(path)
   return p:match('([^/]+)$') or p
 end
 
+-- Show `text` in the window's right-status area for `ms` milliseconds, then
+-- clear it. Used as a confirmation channel for actions that previously only
+-- toasted — toasts depend on the OS notification surface (Focus Assist,
+-- Windows toast permissions, etc.) and silently no-op when those are off.
+--
+-- If `claude_indicators = true` is on, claude.lua's update-status tick
+-- (every ~2s) will overwrite the flash early and restore claude's own
+-- status afterwards. So with claude on, the window of "blank right status"
+-- between flash-clear and claude's next tick is at most one tick.
+function M.flash_status(window, text, ms)
+  if not window or not text or text == '' then return end
+  ms = ms or 1500
+  local ok_wt, wezterm = pcall(require, 'wezterm')
+  if not ok_wt then return end
+  local formatted = wezterm.format {
+    { Foreground = { Color = '#86efac' } }, -- soft green, matches picker open-marker
+    { Text = '  ' .. text .. '  ' },
+    'ResetAttributes',
+  }
+  window:set_right_status(formatted)
+  -- Snapshot ID via wezterm.GLOBAL so a later flash within this window's
+  -- timeout supersedes earlier scheduled clears (avoids a stale clear
+  -- erasing a fresh message).
+  if not (wezterm.time and wezterm.time.call_after) then return end
+  wezterm.GLOBAL = wezterm.GLOBAL or {}
+  local id = (wezterm.GLOBAL.termtools_flash_id or 0) + 1
+  wezterm.GLOBAL.termtools_flash_id = id
+  wezterm.time.call_after(ms / 1000, function()
+    if wezterm.GLOBAL and wezterm.GLOBAL.termtools_flash_id == id then
+      window:set_right_status('')
+      wezterm.GLOBAL.termtools_flash_id = nil
+    end
+  end)
+end
+
 -- Returns a fresh table with `defaults` overlaid by `user_opts`. Both args
 -- are optional; nil/missing keys are skipped, so calling with `nil` for
 -- either side returns a safe shallow copy of the other.
